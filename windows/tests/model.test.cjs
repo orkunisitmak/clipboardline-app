@@ -29,6 +29,18 @@ test('retention is per-kind; pinned/folder/tag records remain permanent',()=>fix
 test('remove hides saved items, trashes temporary ones; undo preserves later edits',()=>fixture(s=>{const saved=s.insert('text','saved'),temp=s.insert('text','temporary');s.modify('pin',{ids:[saved.id]});s.modify('remove',{ids:[saved.id,temp.id]});assert.equal(saved.hiddenFromShelf,true);assert.ok(temp.trashedAt);s.modify('name',{id:saved.id,name:'Later name'});s.modify('undo');assert.equal(saved.hiddenFromShelf,false);assert.equal(temp.trashedAt,null);assert.equal(saved.name,'Later name');}));
 test('explicit Trash invalidates removal undo and deletion requires Trash',()=>fixture(s=>{const item=s.insert('text','text');assert.throws(()=>s.modify('delete',{ids:[item.id]}));s.modify('remove',{ids:[item.id]});s.modify('restore',{ids:[item.id]});assert.equal(s.undoStack.length,0);s.modify('trash',{ids:[item.id]});s.modify('delete',{ids:[item.id]});assert.equal(s.data.items.length,0);}));
 test('batch operations are atomic when one content kind is invalid',()=>fixture(s=>{const text=s.insert('text','before'),image=s.insert('image',png);assert.throws(()=>s.modify('editText',{ids:[text.id,image.id],text:'after'}));assert.equal(s.item(text.id).text,'before');}));
+test('a failed command rolls back in place so background jobs keep the item objects they hold',()=>fixture(s=>{
+ // OCR and link previews hold an item across awaits and discard their result unless store.data.items still includes it.
+ const text=s.insert('text','before'),image=s.insert('image',png),other=s.insert('text','other');
+ assert.throws(()=>s.modify('editText',{ids:[text.id,image.id],text:'after'}));
+ assert.throws(()=>s.modify('createFolder',{name:''}));
+ for(const held of [text,image,other])assert.ok(s.data.items.includes(held));
+ assert.equal(text.text,'before');assert.deepEqual(s.data.items.map(item=>item.id),[other.id,image.id,text.id]);
+ // A corrupt library can repeat an id; rolling back must keep both entries' own content.
+ const twin={...structuredClone(text),text:'twin'};s.data.items.push(twin);
+ assert.throws(()=>s.modify('createFolder',{name:''}));
+ assert.deepEqual(s.data.items.filter(item=>item.id===text.id).map(item=>item.text),['before','twin']);assert.ok(s.data.items.includes(text)&&s.data.items.includes(twin));
+}));
 test('safe JSON persistence reloads content and stores rollback copy',()=>fixture((s,_time,dir)=>{const item=s.insert('text','private locally saved');s.modify('pin',{ids:[item.id]});assert.equal(new Store(dir).item(item.id).pinned,true);assert.ok(fs.existsSync(path.join(dir,'library.json.backup')));if(process.platform!=='win32')assert.equal(fs.statSync(path.join(dir,'library.json')).mode&0o777,0o600);else{const powershell=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');const raw=require('node:child_process').execFileSync(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'..','native','protect-directory.ps1'),'-Directory',dir,'-Check'],{windowsHide:true,encoding:'utf8',env:require('../lib/windows-environment.cjs').windowsEnvironment()});const acl=JSON.parse(raw);assert.equal(acl.protected,true);assert.ok(acl.principals.includes(acl.currentUser));assert.deepEqual([...new Set(acl.principals)].sort(),[acl.currentUser,'S-1-5-18','S-1-5-32-544'].sort());}}));
 test('added and renamed tags share the macOS 64-grapheme and control-character rule',()=>fixture(s=>{
  const value=s.insert('text','tagged'),limit='t'.repeat(64),long='t'.repeat(65);
@@ -117,6 +129,10 @@ test('retaining and inspector details save without pinning and preserve content 
  time(3000);assert.equal(s.insert('text','Exact value').id,item.id);assert.equal(item.note,'Searchable note');assert.equal(item.name,'Friendly name');assert.equal(item.retainedAt,1000);
  const image=s.insert('image',png);assert.throws(()=>s.modify('details',{ids:[item.id,image.id],name:'Must roll back',text:'Invalid mixed edit'}));assert.equal(s.item(item.id).name,'Friendly name');
 }));
+test('a blank or padded item name is trimmed so a blank one falls back to the content',()=>fixture(s=>{
+ const item=s.insert('text','Quarterly plan\nsecond line');s.modify('details',{id:item.id,name:'   '});assert.equal(item.name,'');
+ s.modify('details',{id:item.id,name:'  Padded name \t'});assert.equal(item.name,'Padded name');
+}));
 test('old pinned and organized records migrate to sticky Saved without changing original dates',()=>fixture((s,time,dir)=>{
  const item=s.insert('text','Legacy saved');s.modify('pin',{id:item.id});delete item.retainedAt;s.persist();time(9000);
  const restored=new Store(dir,{clock:()=>9000}),value=restored.item(item.id);assert.equal(value.retainedAt,1000);assert.equal(value.createdAt,1000);assert.equal(value.updatedAt,1000);
@@ -154,4 +170,17 @@ test('selection lookups keep request order and reject missing items',()=>fixture
  const first=s.insert('text','first'),second=s.insert('text','second');assert.deepEqual(s.selected([first.id,second.id]).map(item=>item.id),[first.id,second.id]);
  assert.throws(()=>s.selected([first.id,'00000000-0000-4000-8000-000000000000']),/no longer exists/);
  s.modify('trash',{ids:[first.id]});s.modify('delete',{ids:[first.id]});assert.deepEqual(s.data.items.map(item=>item.id),[second.id]);
+}));
+test('link preview metadata stores its thumbnail only while the link still exists',()=>fixture((s,time,dir)=>{
+ const files=()=>fs.readdirSync(path.join(dir,'media')),url='https://example.com/a';
+ const gone=s.insert('link',url);s.modify('trash',{ids:[gone.id]});assert.equal(s.setLinkMetadata(gone,url,{title:'T',thumbnail:png}),false);assert.deepEqual(files(),[]);assert.equal(gone.title,'');
+ const deleted=s.insert('link','https://example.com/b');s.modify('trash',{ids:[deleted.id]});s.modify('delete',{ids:[deleted.id]});assert.equal(s.setLinkMetadata(deleted,deleted.url,{title:'T',thumbnail:png}),false);assert.deepEqual(files(),[]);
+ const live=s.insert('link','https://example.com/c');assert.equal(s.setLinkMetadata(live,live.url,{title:'Title',author:'Writer',thumbnail:png}),true);
+ assert.equal(live.title,'Title');assert.equal(live.author,'Writer');assert.deepEqual(files(),[live.thumbnailFile]);
+ assert.equal(s.setLinkMetadata(live,'https://example.com/other',{title:'X'}),false);assert.equal(live.title,'Title');
+}));
+test('pin on a mixed selection pins every item and only a fully pinned selection unpins like macOS',()=>fixture(s=>{
+ const a=s.insert('text','first pin'),b=s.insert('text','second pin'),pinned=()=>[a,b].map(value=>s.item(value.id).pinned);
+ s.modify('pin',{ids:[a.id]});s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[true,true]);
+ s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[false,false]);
 }));

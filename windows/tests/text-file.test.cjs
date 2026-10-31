@@ -39,3 +39,16 @@ test('rejects UTF-16LE imports with an incomplete code unit',()=>{
   const contents=Buffer.from([0xff,0xfe,0x41]);
   assert.throws(()=>decodeTextFile(contents),/Invalid UTF-16LE text file/);
 });
+
+test('rejects malformed UTF-8 text instead of silently replacing its bytes',()=>{
+  for(const contents of [Buffer.from([0x61,0xc3,0x28]),Buffer.from([0xef,0xbb,0xbf,0xe2,0x82])]) {
+    assert.throws(()=>decodeTextFile(contents),/Invalid UTF-8 text file/);
+  }
+});
+
+test('rejects unpaired UTF-16 surrogates in both byte orders',()=>{
+  const unpairedLE=Buffer.from([0xff,0xfe,0x61,0x00,0x3d,0xd8]);
+  const unpairedBE=Buffer.from([0xfe,0xff,0x00,0x61,0xd8,0x3d]);
+  assert.throws(()=>decodeTextFile(unpairedLE),/Invalid UTF-16LE text file/);
+  assert.throws(()=>decodeTextFile(unpairedBE),/Invalid UTF-16BE text file/);
+});

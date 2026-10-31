@@ -24,3 +24,13 @@ test('keeps names that only start like a device name',async()=>{
   const names=await exported(['console','com0','com10','nullable'].map(name=>({kind:'text',name,text:'body'})));
   assert.deepEqual(names,['com0.txt','com10.txt','console.txt','nullable.txt']);
 });
+
+
+test('truncating exported names preserves complete Unicode characters',async()=>{
+  const emoji=String.fromCodePoint(0x1f9e0);
+  const names=await exported([
+    {kind:'text',name:'a'.repeat(99)+emoji+' extra',text:'first'},
+    {kind:'text',name:'b'.repeat(98)+emoji+' extra',text:'second'}
+  ]);
+  assert.deepEqual(names,['a'.repeat(99)+'.txt','b'.repeat(98)+emoji+'.txt']);
+});

@@ -50,3 +50,11 @@ test('metadata titles decode numeric references and collapse layout whitespace',
  assert.equal((await linkMetadata('https://example.com',page('<meta property="og:title" content="It&rsquo;s &copy; &unknown; &UUML;">'))).title,'It’s © &unknown; &UUML;');
  assert.equal((await linkMetadata('https://example.com',page('<title>  </title>'))).title,'example.com');
 });
+
+test('YouTube Music links use oEmbed through the canonical host',async()=>{
+ let requested='';
+ const fetcher=async url=>{requested=url;return{bytes:Buffer.from(JSON.stringify({title:'Song',author_name:'Artist'})),url,type:'application/json'};};
+ const result=await linkMetadata('https://music.youtube.com/watch?v=abc123',fetcher);
+ assert.equal(result.title,'Song');
+ assert.equal(new URL(requested).searchParams.get('url'),'https://www.youtube.com/watch?v=abc123');
+});

@@ -44,6 +44,9 @@ async function readClipboardContent({clipboard,sequence,marker,plainURL,captureL
     const url=captureLinks?plainURL(value):null;kind=url?'link':'text';if(url)value=url;
   }
   if(!await current())return changed;
-  return{kind,value,owned:false,fingerprint:kind+':'+crypto.createHash('sha256').update(bytes).digest('hex')};
+  return{kind,value,sequence:before,owned:false,fingerprint:kind+':'+crypto.createHash('sha256').update(bytes).digest('hex')};
 }
-module.exports={privateClipboard,readClipboardContent};
+// A notification is a repeat only for the same native generation. An identical later copy is a new copy
+// (it re-adds an item the user deleted or hid), as macOS changeCount does.
+function repeatedGeneration(state,content){if(content.sequence===state.sequence)return true;state.sequence=content.sequence;return false;}
+module.exports={privateClipboard,readClipboardContent,repeatedGeneration};

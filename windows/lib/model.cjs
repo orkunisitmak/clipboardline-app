@@ -188,7 +188,7 @@ class Store {
   }
   preparePermanentDeletion(){
     if(fs.lstatSync(this.mediaDirectory).isSymbolicLink())fail('Managed media must not be a symlink.');
-    const referenced=this.mediaReferences(),files=fs.readdirSync(this.mediaDirectory).filter(name=>MANAGED_MEDIA.test(name)&&!referenced.has(name));
+    const referenced=this.mediaReferences();for(const filename of this.inFlightMediaReferences.keys())referenced.add(filename);const files=fs.readdirSync(this.mediaDirectory).filter(name=>MANAGED_MEDIA.test(name)&&!referenced.has(name));
     this.data.pendingDeletionFiles=[...new Set([...(this.data.pendingDeletionFiles||[]),...files])];
     this.data.pendingBackupRefresh=true;
   }
@@ -207,7 +207,7 @@ class Store {
       // records cannot survive in that older snapshot or be resurrected from it.
       this.refreshPrivateBackup();
       if(fs.lstatSync(this.mediaDirectory).isSymbolicLink())throw new Error('Managed media directory changed.');
-      const referenced=this.mediaReferences();
+      const referenced=this.mediaReferences();for(const filename of this.inFlightMediaReferences.keys())referenced.add(filename);
       for(const name of pending){if(!MANAGED_MEDIA.test(name))throw new Error('Invalid managed filename.');if(referenced.has(name))continue;try{fs.unlinkSync(path.join(this.mediaDirectory,name));}catch(error){if(error.code!=='ENOENT')throw error;}}
       this.data.pendingDeletionFiles=[];this.data.pendingBackupRefresh=false;
       try{this.persist();}catch(error){this.data.pendingDeletionFiles=pending;this.data.pendingBackupRefresh=true;throw error;}
@@ -223,6 +223,12 @@ class Store {
   }
   invalidateTrashUndo(value){const affected=new Set(value);this.trashUndoStack=this.trashUndoStack.map(batch=>batch.filter(entry=>!affected.has(entry.id))).filter(batch=>batch.length);}
   markCopied(value){this.modify('markCopied',{ids:value});}
+  // Applies fetched preview metadata only while the link is still live, so a link removed during the fetch gets no stored thumbnail.
+  setLinkMetadata(item,url,{title,author,thumbnail}){
+    if(!this.data.items.includes(item)||item.trashedAt||item.url!==url)return false;
+    let thumbnailFile='';if(thumbnail)try{thumbnailFile=this.putPNG(thumbnail);}catch{}
+    item.title=title||new URL(url).hostname;item.author=author||'';if(thumbnailFile)item.thumbnailFile=thumbnailFile;this.persist();return true;
+  }
   putPNG(buffer) {
     if (!Buffer.isBuffer(buffer) || buffer.length < 24 || buffer.length > 64 * 1024 * 1024 || buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') fail('Invalid PNG image');
     const width = buffer.readUInt32BE(16), height = buffer.readUInt32BE(20);
@@ -281,12 +287,12 @@ class Store {
         if(referenced)for(const filename of [assets.videoFile,assets.posterFile])if(MANAGED_MEDIA.test(filename)&&!referenced.has(filename))try{fs.unlinkSync(path.join(this.mediaDirectory,filename));}catch{}
         throw error;
       }
-      const before=clone(this.data),now=this.clock();
+      const before=clone(this.data),live=this.liveItems(),now=this.clock();
       try{
         const item=prior||{id:crypto.randomUUID(),kind:'image',recording:true,text:'',url:'',title:'',name:'',pinned:false,folderIds:[],tags:[],note:'',retainedAt:null,lastCopiedAt:null,createdAt:now,updatedAt:now,trashedAt:null,hiddenFromShelf:false,annotations:[],crop:null,ocrText:'',imageFile:assets.posterFile,renderedFile:'',videoFile:assets.videoFile,renderedVideoFile:'',...assets.details};
         item.createdAt=now;item.updatedAt=now;item.hiddenFromShelf=false;item.captureRevision=crypto.randomUUID();
         this.data.items=[item,...this.data.items.filter(entry=>entry.id!==item.id)];this.expire(false);this.persist();return item;
-      }catch(error){this.data=before;throw error;}
+      }catch(error){this.rollback(before,live);throw error;}
     }finally{this.releaseInFlightMedia(assets.inFlightMediaFiles);}
   }
   async commitRecordingTrim(value){
@@ -295,7 +301,7 @@ class Store {
     try{
       const item=this.item(value.id);if(!item.recording||item.trashedAt||(item.renderedVideoFile||item.videoFile).slice(0,64)!==value.sourceFingerprint)fail('The recording changed while trimming');
       if(value.signal?.aborted)fail('Video operation canceled');
-      const before=clone(this.data);try{Object.assign(item,assets.details,{renderedVideoFile:assets.videoFile,renderedFile:assets.posterFile,updatedAt:this.clock()});this.persist();return item;}catch(error){this.data=before;throw error;}
+      const before=clone(this.data),live=this.liveItems();try{Object.assign(item,assets.details,{renderedVideoFile:assets.videoFile,renderedFile:assets.posterFile,updatedAt:this.clock()});this.persist();return item;}catch(error){this.rollback(before,live);throw error;}
     }finally{this.releaseInFlightMedia(assets.inFlightMediaFiles);}
   }
   insert(kind, value, extra = {}) {
@@ -345,9 +351,13 @@ class Store {
     }
     if (persist && changed) this.persist();
   }
+  liveItems(){return [...this.data.items];}
+  // Restore in place: OCR and link-preview jobs hold item objects across awaits and drop their result once store.data.items no longer includes them.
+  // The snapshot and the live list were taken together, so match by position: each live object is reused at most once, even if a corrupt library repeats an id.
+  rollback(before,live){before.items=before.items.map((saved,index)=>{const item=live[index];if(!item||item.id!==saved.id)return saved;for(const key of Object.keys(item))delete item[key];return Object.assign(item,saved);});this.data=before;}
   modify(action, payload = {}) {
-    const before=clone(this.data), undo=clone(this.undoStack), trashUndo=clone(this.trashUndoStack);
-    try{return this.modifyTransaction(action,payload);}catch(error){if(!error.committed){this.data=before;this.undoStack=undo;this.trashUndoStack=trashUndo;}throw error;}
+    const before=clone(this.data), live=this.liveItems(), undo=clone(this.undoStack), trashUndo=clone(this.trashUndoStack);
+    try{return this.modifyTransaction(action,payload);}catch(error){if(!error.committed){this.rollback(before,live);this.undoStack=undo;this.trashUndoStack=trashUndo;}throw error;}
   }
   modifyTransaction(action, payload = {}) {
     const now = this.clock();

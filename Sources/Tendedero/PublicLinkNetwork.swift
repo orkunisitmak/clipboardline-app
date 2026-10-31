@@ -355,9 +355,9 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
     let author: String?
     let thumbnailURL: URL?
 
-    init(data: Data, url: URL) throws {
+    init(data: Data, url: URL, contentType: String = "") throws {
         guard data.count <= 512 * 1024 else { throw PublicLinkError.tooLarge }
-        let source = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
+        let source = Self.decode(data, contentType: contentType)
         let html = Self.replacing(#"(?is)<!--.*?-->|<script\b[^>]*>.*?</script\s*>|<style\b[^>]*>.*?</style\s*>"#, in: source, with: "")
         let tags = try NSRegularExpression(pattern: #"(?is)<meta\b([^>]{0,8192})>"#)
         let attributes = try NSRegularExpression(pattern: #"([A-Za-z_:][A-Za-z0-9_:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))"#)
@@ -379,6 +379,35 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
         author = Self.clean(metadata["author"] ?? metadata["og:site_name"], limit: 200)
         let image = metadata["og:image:secure_url"] ?? metadata["og:image"] ?? metadata["twitter:image"]
         thumbnailURL = image.flatMap { URL(string: $0, relativeTo: url)?.absoluteURL }.flatMap { PublicLinkDestination($0)?.url }
+    }
+    /// Encoding sniffing order, as in windows/lib/network.cjs decodeHTML: UTF-8 BOM, Content-Type charset,
+    /// XML declaration (XHTML only), early <meta charset>. Unknown labels fall through; undeclared bytes
+    /// that are not UTF-8 are windows-1252. The first 2048 bytes are read as Latin-1 only to find a label.
+    static func decode(_ data: Data, contentType: String = "") -> String {
+        let head = String(data: data.prefix(2048), encoding: .isoLatin1) ?? ""
+        func labels(_ pattern: String, in text: String) -> [String] {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
+            return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }
+        }
+        let hasBOM = data.starts(with: [0xef, 0xbb, 0xbf]), bom = hasBOM ? ["utf-8"] : []
+        let xml = contentType.range(of: "application/xhtml+xml", options: .caseInsensitive) == nil ? [] :
+            Array(labels(#"^\s*<\?xml[^>]*\sencoding\s*=\s*["']([\w.:-]+)"#, in: head).prefix(1))
+        // A meta declaration of UTF-16 cannot be true for ASCII-compatible markup; HTML treats it as UTF-8.
+        let meta = labels(#"<meta[^>]*[\s"';]charset\s*=\s*["']?([\w.:-]+)"#, in: head).map { $0.lowercased().hasPrefix("utf-16") ? "utf-8" : $0 }
+        let header = Array(labels(#"(?:^|;)\s*charset\s*=\s*["']?([\w.:-]+)"#, in: contentType).prefix(1))
+        let declared: [String] = bom + header + xml + meta
+        if let encoding = declared.lazy.compactMap(Self.encoding(for:)).first {
+            if encoding == .utf8 { return String(decoding: hasBOM ? data.dropFirst(3) : data, as: UTF8.self) }
+            if let text = String(data: data, encoding: encoding) { return text }
+        }
+        return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .windowsCP1252) ?? String(data: data, encoding: .isoLatin1) ?? ""
+    }
+    private static func encoding(for label: String) -> String.Encoding? {
+        // WHATWG maps the Latin-1 and Latin-5 labels to their Windows supersets.
+        let aliases = ["iso-8859-1": "windows-1252", "latin1": "windows-1252", "us-ascii": "windows-1252", "ascii": "windows-1252", "iso-8859-9": "windows-1254", "latin5": "windows-1254"]
+        let name = label.lowercased(), converted = CFStringConvertIANACharSetNameToEncoding((aliases[name] ?? name) as CFString)
+        guard converted != 0xFFFF_FFFF else { return nil }
+        return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(converted))
     }
     private static func replacing(_ pattern: String, in value: String, with replacement: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }

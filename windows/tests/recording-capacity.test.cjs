@@ -120,3 +120,21 @@ test('real video import registers its file before a concurrent capacity cleanup'
   fs.rmSync(data,{recursive:true,force:true});
  }
 });
+test('permanently deleting an item keeps media held by an in-progress recording import',async()=>{
+ const data=directory('.recording-delete-inflight-');
+ try{
+  const store=new Store(data),older=source(data,'older.mp4','synthetic older video bytes'),incoming=source(data,'incoming.mp4','synthetic incoming video bytes');installSyntheticVideoWriter(store);
+  const first=await store.insertRecording(recording(older)),name=crypto.createHash('sha256').update(fs.readFileSync(incoming)).digest('hex')+'.mp4';
+  let announce;const ready=new Promise(resolve=>{announce=resolve;});let resume;const gate=new Promise(resolve=>{resume=resolve;});
+  const recordingAssets=store.recordingAssets.bind(store);
+  store.recordingAssets=async value=>{const assets=await recordingAssets(value);announce();await gate;return assets;};
+  const pending=store.insertRecording(recording(incoming,2000));
+  await ready;
+  store.modify('trash',{id:first.id});store.modify('delete',{id:first.id});
+  resume();
+  const item=await pending;
+  assert.equal(item.videoFile,name);
+  assert.ok(fs.existsSync(path.join(store.mediaDirectory,name)));
+  assert.ok(fs.existsSync(path.join(store.mediaDirectory,item.imageFile)));
+ }finally{fs.rmSync(data,{recursive:true,force:true});}
+});

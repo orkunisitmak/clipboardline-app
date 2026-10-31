@@ -97,11 +97,14 @@ function meta(html, name) {
 }
 async function linkMetadata(input, fetcher = metadataFetch) {
   metadataGuard(new URL(input));
-  const url = new URL(input); const youtube = /^(www\.|m\.)?youtube\.com$/.test(url.hostname) || url.hostname === 'youtu.be';
+  const url = new URL(input); const youtube = /^(www\.|m\.|music\.)?youtube\.com$/.test(url.hostname) || url.hostname === 'youtu.be';
   if (youtube) {
-    const response = await fetcher('https://www.youtube.com/oembed?url=' + encodeURIComponent(url.href) + '&format=json', {maximum: 64 * 1024});
+    // As on macOS, ask oEmbed about the canonical host: a YouTube Music link is the same video.
+    const video = new URL(url.href); if (video.hostname === 'music.youtube.com') video.hostname = 'www.youtube.com';
+    const response = await fetcher('https://www.youtube.com/oembed?url=' + encodeURIComponent(video.href) + '&format=json', {maximum: 64 * 1024});
     const data = JSON.parse(response.bytes.toString('utf8'));
-    return {title: String(data.title || '').slice(0, 500), author: String(data.author_name || '').slice(0, 200), thumbnail: data.thumbnail_url || ''};
+    if(!data||typeof data!=='object'||Array.isArray(data))return{title:url.hostname,author:'',thumbnail:''};
+    return {title: String(data.title || '').trim().slice(0, 500)||url.hostname, author: String(data.author_name || '').slice(0, 200), thumbnail: typeof data.thumbnail_url==='string'?data.thumbnail_url:''};
   }
   const response = await fetcher(url.href); if (!/text\/html|application\/xhtml/i.test(response.type)) return {title: url.hostname};
   const html = decodeHTML(response.bytes, response.type);
