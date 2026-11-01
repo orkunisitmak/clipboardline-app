@@ -11,7 +11,7 @@ const {execFileSync}=require('node:child_process');
 const os=require('node:os');
 const {exportCopies}=require('../lib/export-copies.cjs');
 
-function fixture({deferInitialState=false,initialVisible=true,queuedAnimationFrames=false,imageRaster={width:900,height:220},imageDocument=false,exporter=null}={}){
+function fixture({deferInitialState=false,initialVisible=true,queuedAnimationFrames=false,imageRaster={width:900,height:220},imageDocument=false,platform=null,width=null,exporter=null}={}){
  const listeners=new Map(),nodes=new Map(),commands=[],imageLoads=[],animationFrames=[],paintCalls=[];let exportFailures=0;
  class Element{
   constructor(id=''){this.id=id;this.innerHTML='';this.textContent='';this.dataset={};this.style={};this.className='';this.value='';this.selectionStart=0;this.selectionEnd=0;this.classList={add(){},remove(){},contains(){return false;}};}
@@ -32,6 +32,7 @@ function fixture({deferInitialState=false,initialVisible=true,queuedAnimationFra
  const image='00000000-0000-4000-8000-000000000001',text1='00000000-0000-4000-8000-000000000002',text2='00000000-0000-4000-8000-000000000003',link='00000000-0000-4000-8000-000000000004';
  const base=(id,kind,createdAt,extra)=>({id,kind,createdAt,updatedAt:createdAt,name:'',title:'',text:'',url:'',pinned:false,folderIds:[],tags:[],trashedAt:null,hiddenFromShelf:false,...extra});
  const state={items:[base(image,'image',1000,{name:'Synthetic image',...(imageDocument?{annotations:[],crop:null}:{}),mediaUrl:'appmedia://media/'+image,originalMediaUrl:'appmedia://media/'+image+'/original'}),base(text1,'text',900,{text:'Text one'}),base(text2,'text',800,{text:'Text two'}),base(link,'link',700,{url:'https://example.com/reference',title:'Reference link'})],folders:[],settings:{visibleKinds:['image','text','link'],retentionDays:{image:30,text:30,link:30},shortcuts:{toggle:'Control+Alt+Space',search:'Control+Alt+S'},localShortcuts:{},language:'en',theme:'soft',cardSize:'medium'},view:'shelves',version:'1.7.0',windowVisible:initialVisible,canUndo:false,canUndoTrash:false,libraryRevision:0};
+ if(platform)state.platform=platform;
  let subscriber,removed=[],trashRemoved=[],cleanupFailures=0,editFailures=0,delayedReply=null,releaseInitialState,deferredImageBroadcast=null,pendingImageBroadcast=null;
  const clone=value=>structuredClone(value);
  const api={emit(patch){Object.assign(state,patch);subscriber?.(clone(state));},surface(patch){Object.assign(state,patch);subscriber?.({surfaceOnly:true,...clone(patch)});},state:async()=>{const initial=clone(state);if(deferInitialState)await new Promise(resolve=>{releaseInitialState=resolve;});return initial;},subscribe(fn){subscriber=fn;return()=>{};},async command(action,payload={}){commands.push({action,payload:clone(payload)});const selected=state.items.filter(item=>(payload.ids||[payload.id]).includes(item.id));
@@ -56,10 +57,10 @@ function fixture({deferInitialState=false,initialVisible=true,queuedAnimationFra
   if(delayedReply?.action===action){const pending=delayedReply;delayedReply=null;await pending.promise;}
   return output;
  }};
- const context={window:{clipboardLine:api,addEventListener(name,listener){if(!listeners.has('window:'+name))listeners.set('window:'+name,[]);listeners.get('window:'+name).push(listener);}},document,HTMLElement:Element,HTMLTextAreaElement:TextArea,Image:FixtureImage,console,structuredClone,URL,Set,Date,JSON,Math,Number,String,requestAnimationFrame:fn=>queuedAnimationFrames?animationFrames.push(fn):fn(),setTimeout:fn=>{queueMicrotask(fn);return 1;},clearTimeout(){}};
+ const context={window:{...(width?{innerWidth:width}:{}),clipboardLine:api,addEventListener(name,listener){if(!listeners.has('window:'+name))listeners.set('window:'+name,[]);listeners.get('window:'+name).push(listener);}},document,HTMLElement:Element,HTMLTextAreaElement:TextArea,Image:FixtureImage,console,structuredClone,URL,Set,Date,JSON,Math,Number,String,requestAnimationFrame:fn=>queuedAnimationFrames?animationFrames.push(fn):fn(),setTimeout:fn=>{queueMicrotask(fn);return 1;},clearTimeout(){}};
  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../locales.js'),'utf8'),context,{filename:'locales.js'});vm.runInContext(fs.readFileSync(path.join(__dirname,'../renderer.js'),'utf8'),context,{filename:'renderer.js'});
  async function ready(){await new Promise(setImmediate);}
- async function key(code,{ctrl=false,alt=false,shift=false,key,target,composing=false,keyCode=0}={}){const event={code,key:key||(/^Key/.test(code)?code.slice(3).toLowerCase():code==='Space'?' ':code),ctrlKey:ctrl,metaKey:false,altKey:alt,shiftKey:shift,repeat:false,isComposing:composing,keyCode,target:target||new Element(),preventDefault(){this.prevented=true;}};for(const listener of listeners.get('keydown')||[])await listener(event);await ready();return event;}
+ async function key(code,{ctrl=false,alt=false,shift=false,meta=false,key,target,composing=false,keyCode=0}={}){const event={code,key:key||(/^Key/.test(code)?code.slice(3).toLowerCase():code==='Space'?' ':code),ctrlKey:ctrl,metaKey:meta,altKey:alt,shiftKey:shift,repeat:false,isComposing:composing,keyCode,target:target||new Element(),preventDefault(){this.prevented=true;}};for(const listener of listeners.get('keydown')||[])await listener(event);await ready();return event;}
  async function click(action,extra={}){const target=new Element();target.dataset.action=action;Object.assign(target.dataset,extra);target.closest=selector=>selector==='[data-action]'?target:null;for(const listener of listeners.get('click')||[])listener({target,stopPropagation(){}});await ready();}
  async function pointer(type,x,y){const target=document.getElementById('markup-canvas');for(const listener of listeners.get(type)||[])listener({target,clientX:x,clientY:y,pointerId:1,shiftKey:false,preventDefault(){}});await ready();}
  async function input(id,value){const target=document.getElementById(id);target.value=value;target.selectionStart=value.length;for(const listener of listeners.get('input')||[])await listener({target});await ready();}
@@ -364,7 +365,8 @@ test('shared macOS/Windows shelf contract runs through actual renderer handlers'
  if(process.env.CLIPBOARDLINE_PARITY_REPORT){
   const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim();
   const implementationSHA256=crypto.createHash('sha256').update(fs.readFileSync(path.resolve(__dirname,'../renderer.js'))).digest('hex');
-  const report={schemaVersion:1,contractId:contract.contractId,platform:'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),implementationSHA256,implementationFiles:{'windows/renderer.js':implementationSHA256},observations,passed:errors.length===0,errors};
+  // Linux ships this same renderer; a Linux host reports as the Linux adapter.
+  const report={schemaVersion:1,contractId:contract.contractId,platform:process.platform==='linux'?'linux':'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),implementationSHA256,implementationFiles:{'windows/renderer.js':implementationSHA256},observations,passed:errors.length===0,errors};
   fs.mkdirSync(path.dirname(path.resolve(process.env.CLIPBOARDLINE_PARITY_REPORT)),{recursive:true});fs.writeFileSync(process.env.CLIPBOARDLINE_PARITY_REPORT,JSON.stringify(report,null,2)+'\n');
  }
  assert.deepEqual(errors,[]);
@@ -682,8 +684,8 @@ test('shared Library keyboard contract runs actual renderer handlers and durable
    }
   }finally{fs.rmSync(directory,{recursive:true,force:true});}
  }
- const libraryReportDestination=process.env.CLIPBOARDLINE_LIBRARY_KEYBOARD_REPORT || (process.env.CLIPBOARDLINE_PARITY_REPORT && path.join(path.dirname(process.env.CLIPBOARDLINE_PARITY_REPORT),'library-windows.json'));
- if(libraryReportDestination){const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim(),report={schemaVersion:1,contractId:contract.contractId,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),platform:'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,observations,errors,passed:errors.length===0};fs.mkdirSync(path.dirname(path.resolve(libraryReportDestination)),{recursive:true});fs.writeFileSync(libraryReportDestination,JSON.stringify(report,null,2)+'\n');}
+ const libraryReportDestination=process.env.CLIPBOARDLINE_LIBRARY_KEYBOARD_REPORT || (process.env.CLIPBOARDLINE_PARITY_REPORT && path.join(path.dirname(process.env.CLIPBOARDLINE_PARITY_REPORT),process.platform==='linux'?'library-linux.json':'library-windows.json'));
+ if(libraryReportDestination){const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim(),report={schemaVersion:1,contractId:contract.contractId,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),platform:process.platform==='linux'?'linux':'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,observations,errors,passed:errors.length===0};fs.mkdirSync(path.dirname(path.resolve(libraryReportDestination)),{recursive:true});fs.writeFileSync(libraryReportDestination,JSON.stringify(report,null,2)+'\n');}
  assert.deepEqual(errors,[]);
 });
 
@@ -729,6 +731,48 @@ test('a capture crop owns Enter before the next render tick can copy and hide th
  await f.key('Enter');
  assert.equal(f.commands.filter(value=>value.action==='copy').length,1,'Enter in the finished preview copies normally');
  assert.equal(f.state.windowVisible,false);
+});
+test('a Linux shelf close button hides only that shelf; closing the last visible shelf hides the line',async()=>{
+ const f=fixture({platform:'linux'});await f.ready();
+ const shelves=()=>[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);
+ assert.match(f.main,/data-action="hide-shelf"[^>]*data-kind="link"/);
+ await f.click('hide-shelf',{kind:'link'});await f.ready();
+ assert.deepEqual(shelves(),['image','text']);assert.equal(f.commands.some(value=>value.action==='hide'),false,'the line stays open');
+ await f.click('hide-shelf',{kind:'image'});await f.ready();assert.deepEqual(shelves(),['text']);
+ await f.click('hide-shelf',{kind:'text'});await f.ready();
+ assert.equal(f.commands.at(-1).action,'hide','the last shelf closes the line instead of leaving it empty');
+ assert.deepEqual(f.commands.filter(value=>value.action==='setSettings').at(-1).payload.patch.visibleKinds,['text'],'one shelf always stays visible');
+ const windows=fixture({platform:'windows'});await windows.ready();
+ assert.doesNotMatch(windows.main,/data-action="hide-shelf"/);assert.match(windows.main,/data-action="hide"/,'Windows keeps its line-wide Hide');
+});
+test('with one Linux shelf showing, Tab shows the next shelf in its place; Windows keeps that shelf',async()=>{
+ const f=fixture({platform:'linux'});await f.ready();
+ const shelves=()=>[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);
+ await f.click('hide-shelf',{kind:'text'});await f.click('hide-shelf',{kind:'link'});await f.ready();assert.deepEqual(shelves(),['image']);
+ for(const expected of ['text','link','image']){await f.key('Tab');await f.ready();assert.deepEqual(shelves(),[expected]);assert.equal(activeKind(f),expected);}
+ await f.click('settings');await f.ready();await f.api.command('setSettings',{patch:{visibleKinds:['image','link']}});await f.api.command('show');await f.ready();
+ await f.key('Tab');await f.ready();assert.deepEqual(shelves(),['image','link'],'several visible shelves are cycled without changing which are shown');assert.equal(activeKind(f),'link');
+ const windows=fixture({platform:'windows'}),shown=()=>[...windows.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);await windows.ready();
+ await windows.api.command('setSettings',{patch:{visibleKinds:['image']}});await windows.api.command('show');await windows.ready();
+ await windows.key('Tab');await windows.ready();assert.deepEqual(shown(),['image']);assert.equal(activeKind(windows),'image');
+});
+test('a Linux global shortcut records the Windows key as Super; local shortcuts and Windows keep it as Ctrl',async()=>{
+ const saved=f=>f.commands.filter(value=>value.action==='setSettings').at(-1)?.payload.patch.shortcuts?.toggle;
+ const linux=fixture({platform:'linux'});await linux.ready();await linux.api.command('settings');await linux.ready();await linux.click('settings-tab',{tab:'shortcuts'});
+ await linux.click('record-global',{keyAction:'toggle'});await linux.key('KeyV',{meta:true});await linux.click('confirm-modal');assert.equal(saved(linux),'Super+V');
+ const windows=fixture({platform:'windows'});await windows.ready();await windows.api.command('settings');await windows.ready();await windows.click('settings-tab',{tab:'shortcuts'});
+ await windows.click('record-global',{keyAction:'toggle'});await windows.key('KeyV',{meta:true,alt:true});await windows.click('confirm-modal');assert.equal(saved(windows),'Control+Alt+V');
+});
+test('a Linux shelf page fills a wide monitor and number badges stay on the first nine cards; Windows pages hold nine',async()=>{
+ for(const [platform,cards,pages] of [['linux',14,2],['windows',9,3]]){
+ const f=fixture({width:2560,platform});
+ for(let index=0;index<20;index++)f.state.items.push({id:'10000000-0000-4000-8000-'+String(index).padStart(12,'0'),kind:'image',createdAt:5000+index,updatedAt:5000+index,name:'Wide '+index,title:'',text:'',url:'',pinned:false,folderIds:[],tags:[],trashedAt:null,hiddenFromShelf:false,mediaUrl:'appmedia://media/w'+index});
+ await f.ready();await f.api.command('show');await f.ready();
+ const row=f.main.slice(f.main.indexOf('data-shelf="image"'),f.main.indexOf('data-shelf="text"'));
+ assert.equal((row.match(/<article class="card/g)||[]).length,cards,platform+': Linux fits (2560 - 24) / (150 + 24) medium cards');
+ assert.deepEqual([...row.matchAll(/class="card-number"[^>]*>(\d+)</g)].map(match=>Number(match[1])),[1,2,3,4,5,6,7,8,9]);
+ assert.match(row,new RegExp('1 / '+pages),platform+': 21 images');
+ }
 });
 
 test('export and shortcut-conflict notices follow the selected language',async()=>{

@@ -56,9 +56,9 @@
       },
       {
         "id": "shelf-close-button",
-        "macos": "The shelf toolbar has no close button; Shift+I, Shift+T, Shift+L and Visible shelves hide one shelf",
-        "windows": "Each shelf's toolbar has a close button that hides the whole line",
-        "linux": "Each shelf's close button hides that shelf like Shift+I, Shift+T or Shift+L; closing the last visible shelf hides the line",
+        "macos": "The shelf toolbar has no close button; Shift+I, Shift+T, Shift+L and Visible shelves hide one shelf; with one shelf showing, Tab shows the next shelf in its place",
+        "windows": "Each shelf's toolbar has a close button that hides the whole line; with one shelf showing, Tab keeps that shelf",
+        "linux": "Each shelf's close button hides that shelf like Shift+I, Shift+T or Shift+L; closing the last visible shelf hides the line; with one shelf showing, Tab shows the next shelf in its place, as on the Mac",
         "reason": "The Electron editions repeat the toolbar on every shelf; on Linux its close button closes that shelf, as a per-shelf control reads, while Windows keeps its line-wide Hide. The shortcuts and Visible shelves are the same everywhere."
       },
       {
@@ -70,9 +70,9 @@
       },
       {
         "id": "linux-full-screen-line",
-        "macos": "The line covers the screen's visible frame",
-        "windows": "The line covers the display work area",
-        "linux": "The line covers the work area of the monitor in use; Settings → General → Fill the whole screen makes it full screen over panels and the taskbar",
+        "macos": "The line covers the screen's visible frame and a shelf page fills its width",
+        "windows": "The line covers the display work area; a shelf page holds up to nine cards",
+        "linux": "The line covers the work area of the monitor in use; Settings → General → Fill the whole screen makes it full screen over panels and the taskbar; a shelf page fills the line's width, as on the Mac, and number keys select its first nine cards",
         "reason": "Linux desktops differ in panel layout and Wayland clients cannot place themselves, so the compositor's full-screen state is the only way to cover panels."
       },
       {

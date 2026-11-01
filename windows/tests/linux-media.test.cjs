@@ -1,5 +1,8 @@
 'use strict';
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+// Linux desktop integration; the Linux CI runs it, and Windows hosts skip it.
+const linuxOnly={skip:process.platform==='win32'&&'Linux desktop integration'};
+const test=(name,options,body)=>typeof options==='function'?require('node:test').test(name,linuxOnly,options):require('node:test').test(name,{...options,...linuxOnly},body);
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {EventEmitter}=require('node:events');
 const {LinuxMedia,describe,chooseEncoders,encoderAttempts,trimArguments,runTool}=require('../lib/linux-media.cjs');
 

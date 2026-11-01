@@ -17,7 +17,9 @@ const DEFAULTS = Object.freeze({
   autoCheckUpdates: true, watchFolders: [], openAfterScreenshot: true,
   theme:'soft', cardSize:'medium', sounds:false, launchAtLogin:false, language:'system',indexImages:true,
   libraryListMode:false,libraryInspectorVisible:true,librarySidebarVisible:true,librarySidebarWidth:220,libraryInspectorWidth:300,
-  libraryListColumns:{title:300,kind:80,tags:150,created:130},recentPinFolderIds:[]
+  libraryListColumns:{title:300,kind:80,tags:150,created:130},recentPinFolderIds:[],
+  // Linux: the line covers panels and the taskbar instead of the work area.
+  lineFullScreen:false
 });
 const clone = value => structuredClone(value);
 const fail = message => { throw new Error(message); };
@@ -34,7 +36,7 @@ function settings(patch, previous = DEFAULTS) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail('Invalid settings');
   const out = clone(previous);
   for (const [key, value] of Object.entries(patch)) {
-    if (['captureText', 'captureImages', 'captureLinks', 'fetchLinkMetadata','autoCheckUpdates', 'openAfterScreenshot','sounds','launchAtLogin','indexImages','libraryListMode','libraryInspectorVisible','librarySidebarVisible'].includes(key)) {
+    if (['captureText', 'captureImages', 'captureLinks', 'fetchLinkMetadata','autoCheckUpdates', 'openAfterScreenshot','sounds','launchAtLogin','indexImages','libraryListMode','libraryInspectorVisible','librarySidebarVisible','lineFullScreen'].includes(key)) {
       if (typeof value !== 'boolean') fail('Invalid preference');
       out[key] = value;
     } else if (key === 'visibleKinds') {
@@ -120,7 +122,7 @@ class Store {
       const powershell=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
       try{protectDirectory(this.directory,{powershell,script});}
       catch(error){const detail=String(error.stderr||error.message||'').replaceAll(this.directory,'[application data]').replace(/[\r\n]+/g,' ').slice(0,900);fail('The private application data permissions could not be secured. Existing files were preserved. '+detail);}
-    }
+    }else if(process.platform==='linux')fs.chmodSync(this.directory,0o700);
     this.mediaDirectory = path.join(this.directory, 'media'); fs.mkdirSync(this.mediaDirectory, {recursive: true, mode: 0o700});
     if(fs.lstatSync(this.mediaDirectory).isSymbolicLink())fail('Managed media must not be a symlink.');
     this.file = path.join(this.directory, 'library.json');

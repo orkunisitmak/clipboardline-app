@@ -2,12 +2,12 @@
 
 English · [Türkçe](#türkçe)
 
-The Linux edition in [`linux/`](../linux) is an Electron application derived from
-the Windows edition in [`windows/`](../windows). It builds for Linux x64 as an
+The Electron project in [`windows/`](../windows) also builds for Linux x64 as an
 AppImage, a `.deb` and an `.rpm`, and keeps the Windows renderer, Library, Tesseract
 OCR (English/Turkish), offline MobileCLIP-S2 image search, nine language catalogs,
 settings and Control/Alt keyboard map. The Linux desktop integration lives in
-`linux/lib/linux-*.cjs`.
+separate `windows/lib/linux-*.cjs` files; Linux-only behavior is gated so the
+Windows build is unchanged.
 
 **Status:** Linux is a source build. There is no official signed Linux release or
 in-app update channel yet; newer packages are installed over older ones and keep
@@ -118,7 +118,7 @@ Node.js 24 and npm are required. Building `.rpm` also needs `rpm-build`
 `libxcrypt-compat`.
 
 ```sh
-cd linux
+cd windows
 npm ci
 python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP   # offline image search; packages need it
 npm test
@@ -142,12 +142,12 @@ writes `linux.json` and `library-linux.json`; both parity checkers verify them w
 
 ## Türkçe
 
-[`linux/`](../linux) klasöründeki Linux sürümü, [`windows/`](../windows) klasöründeki
-Windows sürümünden türetilmiş bir Electron uygulamasıdır. Linux x64 için AppImage,
+[`windows/`](../windows) klasöründeki Electron projesi Linux x64 için de AppImage,
 `.deb` ve `.rpm` olarak derlenir; Windows ile aynı arayüzü, kütüphaneyi,
 İngilizce/Türkçe Tesseract OCR’ı, çevrimdışı MobileCLIP-S2 görsel aramasını, dokuz
 dil kataloğunu, ayarları ve Control/Alt kısayollarını kullanır. Linux masaüstü
-entegrasyonu `linux/lib/linux-*.cjs` dosyalarındadır.
+entegrasyonu ayrı `windows/lib/linux-*.cjs` dosyalarındadır; Linux’a özgü davranış
+koşula bağlıdır, Windows derlemesi değişmez.
 
 **Durum:** Linux kaynak koddan derlenir. Henüz resmî imzalı bir Linux sürümü veya
 uygulama içi güncelleme kanalı yoktur; yeni paket eskisinin üstüne kurulur,
@@ -246,7 +246,7 @@ Node.js 24 ve npm gerekir. `.rpm` için `rpm-build` (Ubuntu’da `rpm`), Fedora�
 electron-builder’ın paketleme aracı için ayrıca `libxcrypt-compat` gerekir.
 
 ```sh
-cd linux
+cd windows
 npm ci
 python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP   # çevrimdışı görsel arama; paketler için gerekli
 npm test

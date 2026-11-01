@@ -345,12 +345,12 @@ npm run test:electron
 
 ### Linux kaynak geliştirme ve paketler
 
-Linux sürümü, `windows/` projesinden türetilmiş `linux/` klasöründedir. Linux paketleri
+`windows/` içindeki Electron projesi Linux için de derlenir; Linux masaüstü entegrasyonu ayrı `windows/lib/linux-*.cjs` dosyalarındadır. Linux paketleri
 Windows ile aynı bileşenleri ve lisans bildirimlerini içerir; FFmpeg, `wl-clipboard` ve `xdotool`
 isteğe bağlı dağıtım paketleridir, pakete eklenmez.
 
 ```sh
-cd linux
+cd windows
 npm ci
 # Çevrimdışı görsel arama modelleri; paketler bunları içermelidir:
 python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP

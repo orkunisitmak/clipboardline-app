@@ -26,4 +26,3 @@ validation/
 
 # Pinned, reproducible offline search assets are prepared at build time.
 windows/assets/CLIP/
-linux/assets/CLIP/

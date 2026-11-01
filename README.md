@@ -345,12 +345,12 @@ npm run test:electron
 
 ### Linux source development and packages
 
-The Linux edition lives in `linux/`, an Electron project derived from `windows/`.
+The Electron project in `windows/` also builds for Linux; the Linux desktop integration lives in separate `windows/lib/linux-*.cjs` files.
 Linux packages contain the same components and notices as the Windows edition; FFmpeg, `wl-clipboard` and
 `xdotool` are optional distribution packages, never bundled.
 
 ```sh
-cd linux
+cd windows
 npm ci
 # Offline image search models; packages must bundle them:
 python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP
