@@ -82,6 +82,8 @@ import XCTest
         let url = URL(string: "https://public.example.org/page")!
         let parsed = try PublicLinkHTMLMetadata(data: Data("<title>G&uuml;nl&uuml;k &mdash; &Ccedil;i&ccedil;ek &unknown;</title>".utf8), url: url)
         XCTAssertEqual(parsed.title, "Günlük — Çiçek &unknown;")
+        let hex = try PublicLinkHTMLMetadata(data: Data("<title>A&#x2014;B &#X2014;C &#8212;D</title>".utf8), url: url)
+        XCTAssertEqual(hex.title, "A—B —C —D")
     }
 
     func testHTMLHonorsDeclaredMetaCharsetAndFallsBackToWindows1252() throws {
