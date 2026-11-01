@@ -183,6 +183,9 @@ async function readClipboard() {
   capturing=true;
   try{
     const content=await clipboardContent();if(!content)return;
+    // Private mode can be switched on while the clipboard is being read: drop
+    // that capture and adopt its generation so resuming never imports it.
+    if(store.data.settings.paused){if(Number.isInteger(content.sequence)&&content.sequence>0)lastGeneration.sequence=content.sequence;return;}
     if(content.raced){pendingClipboard=true;return;}
     if(repeatedGeneration(lastGeneration,content))return;
     if(content.fingerprint===ownFingerprint){ownFingerprint='';return;}
