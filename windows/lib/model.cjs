@@ -448,7 +448,7 @@ class Store {
       else if(action==='retain')item.retainedAt??=now;
       else if(action==='note')item.note=text(payload.note,1024*1024,true);
       else if(action==='details') {
-        if(payload.name!==undefined)item.name=text(payload.name,200,true).trim();
+        if(payload.name!==undefined)item.name=typeof payload.name==='string'&&!payload.name.trim()?'':itemName(payload.name);
         if(payload.note!==undefined)item.note=text(payload.note,1024*1024,true);
         if(payload.text!==undefined){if(item.kind!=='text')fail('Only text can be edited');item.text=text(payload.text,1024*1024,true);}
       }
