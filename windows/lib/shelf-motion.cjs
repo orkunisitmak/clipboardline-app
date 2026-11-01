@@ -13,7 +13,7 @@
   acknowledge(value){if(!value||!this.pending||value.token!==this.pending.token||value.phase!==this.pending.phase||typeof value.completed!=='boolean')return false;const pending=this.pending;this.pending=null;this.cancelTimer(pending.timer);pending.resolve({completed:value.completed});return true;}
  }
  class ShelfMotion{
-  constructor({body,computed,height,motion,revealed=()=>{},frame=callback=>typeof requestAnimationFrame==='function'?requestAnimationFrame(callback):setTimeout(callback,16),wait=(callback,ms)=>setTimeout(callback,ms)}){this.body=body;this.computed=computed;this.height=height;this.motion=motion;this.revealed=revealed;this.frame=frame;this.wait=wait;this.animation=null;this.pending=null;this.serial=0;this.phase='idle';this.warm=false;this.lifted=false;this.motion?.addEventListener?.('change',()=>{if(this.motion.matches&&this.pending)this.finish(this.pending);});}
+  constructor({body,computed,height,motion,frame=callback=>typeof requestAnimationFrame==='function'?requestAnimationFrame(callback):setTimeout(callback,16),wait=(callback,ms)=>setTimeout(callback,ms)}){this.body=body;this.computed=computed;this.height=height;this.motion=motion;this.frame=frame;this.wait=wait;this.animation=null;this.pending=null;this.serial=0;this.phase='idle';this.warm=false;this.lifted=false;this.motion?.addEventListener?.('change',()=>{if(this.motion.matches&&this.pending)this.finish(this.pending);});}
   offscreen(){return 'translate3d(0,'+(-Math.max(0,this.height())-12)+'px,0)';}
   freeze(){
    // A warmed line sits invisibly at its endpoint; to motion it is still hidden.
@@ -23,7 +23,7 @@
    return value;
   }
   cancel({keepWarm=false}={}){if(!keepWarm)this.freeze();if(this.pending){const pending=this.pending;this.pending=null;pending.resolve({completed:false});}}
-  finish(pending){if(this.pending!==pending)return;this.pending=null;this.warm=false;this.lifted=false;this.body.style.transform=pending.target;this.animation?.cancel();this.animation=null;this.body.style.willChange='';this.body.style.opacity='';this.phase=pending.phase==='open'?'shown':'hidden';if(pending.phase==='open')delete this.body.dataset.shelfMotion;else this.body.dataset.shelfMotion='hidden';pending.resolve({completed:true});if(pending.phase==='open')this.revealed();}
+  finish(pending){if(this.pending!==pending)return;this.pending=null;this.warm=false;this.lifted=false;this.body.style.transform=pending.target;this.animation?.cancel();this.animation=null;this.body.style.willChange='';this.body.style.opacity='';this.phase=pending.phase==='open'?'shown':'hidden';if(pending.phase==='open')delete this.body.dataset.shelfMotion;else this.body.dataset.shelfMotion='hidden';pending.resolve({completed:true});}
   run(value){
    if(!value||!['prepare','open','close','reset'].includes(value.phase))return Promise.resolve({completed:false});
    // A warmed reveal can wait for the desktop's own fade-in: the first frames

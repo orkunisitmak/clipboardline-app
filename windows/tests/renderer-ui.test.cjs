@@ -10,6 +10,9 @@ const crypto=require('node:crypto');
 const {execFileSync}=require('node:child_process');
 const os=require('node:os');
 const {exportCopies}=require('../lib/export-copies.cjs');
+// Linux ships this same renderer. On a Linux host the shared contracts run with
+// the renderer's Linux state and report as the Linux adapter.
+const ADAPTER=process.platform==='linux'?'linux':'windows',ADAPTER_STATE=ADAPTER==='linux'?'linux':null;
 
 function fixture({deferInitialState=false,initialVisible=true,queuedAnimationFrames=false,imageRaster={width:900,height:220},imageDocument=false,platform=null,width=null,exporter=null}={}){
  const listeners=new Map(),nodes=new Map(),commands=[],imageLoads=[],animationFrames=[],paintCalls=[];let exportFailures=0;
@@ -332,7 +335,7 @@ test('shared macOS/Windows shelf contract runs through actual renderer handlers'
  assert.equal(contract.schemaVersion,1);assert.equal(contract.contractId,'clipboardline.shelves.v1');
  const observations=[],errors=[];
  for(const scenario of contract.scenarios){
-  const f=fixture();await f.ready();const aliases=new Map(),values=contract.itemSets[scenario.itemSet].map((entry,index)=>{
+  const f=fixture({platform:ADAPTER_STATE});await f.ready();const aliases=new Map(),values=contract.itemSets[scenario.itemSet].map((entry,index)=>{
    const id='20000000-0000-4000-8000-'+String(index+1).padStart(12,'0');aliases.set(id,entry.id);
    const source=f.state.items.find(value=>value.kind===entry.kind);
    return{...structuredClone(source),id,createdAt:10000-index,name:entry.kind==='image'?entry.text:'',text:entry.kind==='text'?entry.text:'',title:entry.kind==='link'?entry.text:'',url:entry.kind==='link'?'https://example.com/contract/'+entry.id:''};
@@ -365,8 +368,7 @@ test('shared macOS/Windows shelf contract runs through actual renderer handlers'
  if(process.env.CLIPBOARDLINE_PARITY_REPORT){
   const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim();
   const implementationSHA256=crypto.createHash('sha256').update(fs.readFileSync(path.resolve(__dirname,'../renderer.js'))).digest('hex');
-  // Linux ships this same renderer; a Linux host reports as the Linux adapter.
-  const report={schemaVersion:1,contractId:contract.contractId,platform:process.platform==='linux'?'linux':'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),implementationSHA256,implementationFiles:{'windows/renderer.js':implementationSHA256},observations,passed:errors.length===0,errors};
+  const report={schemaVersion:1,contractId:contract.contractId,platform:ADAPTER,hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),implementationSHA256,implementationFiles:{'windows/renderer.js':implementationSHA256},observations,passed:errors.length===0,errors};
   fs.mkdirSync(path.dirname(path.resolve(process.env.CLIPBOARDLINE_PARITY_REPORT)),{recursive:true});fs.writeFileSync(process.env.CLIPBOARDLINE_PARITY_REPORT,JSON.stringify(report,null,2)+'\n');
  }
  assert.deepEqual(errors,[]);
@@ -659,7 +661,7 @@ test('shared Library keyboard contract runs actual renderer handlers and durable
  for(const scenario of contract.scenarios){
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'clipboardline-library-contract-'));
   try{
-   const store=new Store(directory),now=Date.now(),f=fixture(),aliases=new Map(),ids=new Map();await f.ready();f.grid(scenario.columns);
+   const store=new Store(directory),now=Date.now(),f=fixture({platform:ADAPTER_STATE}),aliases=new Map(),ids=new Map();await f.ready();f.grid(scenario.columns);
    store.data.items=contract.records.map((entry,index)=>{const id='30000000-0000-4000-8000-'+String(index+1).padStart(12,'0');aliases.set(id,entry.id);ids.set(entry.id,id);const source=f.state.items.find(value=>value.kind===entry.kind);return{...structuredClone(source),id,createdAt:now-index*1000,updatedAt:now-index*1000,retainedAt:now,pinned:entry.pinned,hiddenFromShelf:!entry.onShelf,name:entry.title,title:entry.kind==='link'?entry.title:'',text:entry.kind==='text'?entry.text:'',url:entry.kind==='link'?'https://example.com/library-contract/'+entry.id:'',captureRevision:crypto.randomUUID(),...(entry.kind==='image'?{imageFile:'0'.repeat(64)+'.png'}:{})};});
    store.persist();let surface={view:'shelves',windowVisible:false,version:'1.7.7'};
    f.api.command=async(action,payload={})=>{f.commands.push({action,payload:structuredClone(payload)});let result;if(['library','show','settings'].includes(action))surface={...surface,view:action==='show'?'shelves':action,windowVisible:true};else if(action==='hide')surface.windowVisible=false;else if(action==='searchImages')result={ids:[],scores:[],available:false,indexing:false};else result=store.modify(action,payload);const next={...store.publicState(),...surface,result};f.api.emit(next);return structuredClone(next);};
@@ -684,8 +686,8 @@ test('shared Library keyboard contract runs actual renderer handlers and durable
    }
   }finally{fs.rmSync(directory,{recursive:true,force:true});}
  }
- const libraryReportDestination=process.env.CLIPBOARDLINE_LIBRARY_KEYBOARD_REPORT || (process.env.CLIPBOARDLINE_PARITY_REPORT && path.join(path.dirname(process.env.CLIPBOARDLINE_PARITY_REPORT),process.platform==='linux'?'library-linux.json':'library-windows.json'));
- if(libraryReportDestination){const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim(),report={schemaVersion:1,contractId:contract.contractId,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),platform:process.platform==='linux'?'linux':'windows',hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,observations,errors,passed:errors.length===0};fs.mkdirSync(path.dirname(path.resolve(libraryReportDestination)),{recursive:true});fs.writeFileSync(libraryReportDestination,JSON.stringify(report,null,2)+'\n');}
+ const libraryReportDestination=process.env.CLIPBOARDLINE_LIBRARY_KEYBOARD_REPORT || (process.env.CLIPBOARDLINE_PARITY_REPORT && path.join(path.dirname(process.env.CLIPBOARDLINE_PARITY_REPORT),'library-'+ADAPTER+'.json'));
+ if(libraryReportDestination){const revision=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim(),report={schemaVersion:1,contractId:contract.contractId,contractSHA256:crypto.createHash('sha256').update(raw).digest('hex'),platform:ADAPTER,hostPlatform:process.platform,mode:'renderer',sourceRevision:revision,observations,errors,passed:errors.length===0};fs.mkdirSync(path.dirname(path.resolve(libraryReportDestination)),{recursive:true});fs.writeFileSync(libraryReportDestination,JSON.stringify(report,null,2)+'\n');}
  assert.deepEqual(errors,[]);
 });
 
@@ -732,29 +734,17 @@ test('a capture crop owns Enter before the next render tick can copy and hide th
  assert.equal(f.commands.filter(value=>value.action==='copy').length,1,'Enter in the finished preview copies normally');
  assert.equal(f.state.windowVisible,false);
 });
-test('a Linux shelf close button hides only that shelf; closing the last visible shelf hides the line',async()=>{
- const f=fixture({platform:'linux'});await f.ready();
- const shelves=()=>[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);
- assert.match(f.main,/data-action="hide-shelf"[^>]*data-kind="link"/);
- await f.click('hide-shelf',{kind:'link'});await f.ready();
- assert.deepEqual(shelves(),['image','text']);assert.equal(f.commands.some(value=>value.action==='hide'),false,'the line stays open');
- await f.click('hide-shelf',{kind:'image'});await f.ready();assert.deepEqual(shelves(),['text']);
- await f.click('hide-shelf',{kind:'text'});await f.ready();
- assert.equal(f.commands.at(-1).action,'hide','the last shelf closes the line instead of leaving it empty');
- assert.deepEqual(f.commands.filter(value=>value.action==='setSettings').at(-1).payload.patch.visibleKinds,['text'],'one shelf always stays visible');
- const windows=fixture({platform:'windows'});await windows.ready();
- assert.doesNotMatch(windows.main,/data-action="hide-shelf"/);assert.match(windows.main,/data-action="hide"/,'Windows keeps its line-wide Hide');
-});
-test('with one Linux shelf showing, Tab shows the next shelf in its place; Windows keeps that shelf',async()=>{
- const f=fixture({platform:'linux'});await f.ready();
- const shelves=()=>[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);
- await f.click('hide-shelf',{kind:'text'});await f.click('hide-shelf',{kind:'link'});await f.ready();assert.deepEqual(shelves(),['image']);
- for(const expected of ['text','link','image']){await f.key('Tab');await f.ready();assert.deepEqual(shelves(),[expected]);assert.equal(activeKind(f),expected);}
- await f.click('settings');await f.ready();await f.api.command('setSettings',{patch:{visibleKinds:['image','link']}});await f.api.command('show');await f.ready();
- await f.key('Tab');await f.ready();assert.deepEqual(shelves(),['image','link'],'several visible shelves are cycled without changing which are shown');assert.equal(activeKind(f),'link');
- const windows=fixture({platform:'windows'}),shown=()=>[...windows.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);await windows.ready();
- await windows.api.command('setSettings',{patch:{visibleKinds:['image']}});await windows.api.command('show');await windows.ready();
- await windows.key('Tab');await windows.ready();assert.deepEqual(shown(),['image']);assert.equal(activeKind(windows),'image');
+test('Linux shelves match Windows: Hide closes the line, Tab keeps a single shelf and a page holds nine cards',async()=>{
+ for(const platform of ['linux','windows']){
+  const f=fixture({width:2560,platform}),shelves=()=>[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]);
+  for(let index=0;index<20;index++)f.state.items.push({id:'10000000-0000-4000-8000-'+String(index).padStart(12,'0'),kind:'image',createdAt:5000+index,updatedAt:5000+index,name:'Wide '+index,title:'',text:'',url:'',pinned:false,folderIds:[],tags:[],trashedAt:null,hiddenFromShelf:false,mediaUrl:'appmedia://media/w'+index});
+  await f.ready();await f.api.command('show');await f.ready();
+  const row=f.main.slice(f.main.indexOf('data-shelf="image"'),f.main.indexOf('data-shelf="text"'));
+  assert.equal((row.match(/<article class="card/g)||[]).length,9,platform);assert.match(row,/1 \/ 3/,platform+': 21 images');
+  assert.doesNotMatch(f.main,/data-action="hide-shelf"/,platform);assert.match(f.main,/data-action="hide"/,platform+': the toolbar keeps the line-wide Hide');
+  await f.api.command('setSettings',{patch:{visibleKinds:['image']}});await f.api.command('show');await f.ready();
+  await f.key('Tab');await f.ready();assert.deepEqual(shelves(),['image'],platform);assert.equal(activeKind(f),'image',platform);
+ }
 });
 test('a Linux global shortcut records the Windows key as Super; local shortcuts and Windows keep it as Ctrl',async()=>{
  const saved=f=>f.commands.filter(value=>value.action==='setSettings').at(-1)?.payload.patch.shortcuts?.toggle;
@@ -763,16 +753,13 @@ test('a Linux global shortcut records the Windows key as Super; local shortcuts 
  const windows=fixture({platform:'windows'});await windows.ready();await windows.api.command('settings');await windows.ready();await windows.click('settings-tab',{tab:'shortcuts'});
  await windows.click('record-global',{keyAction:'toggle'});await windows.key('KeyV',{meta:true,alt:true});await windows.click('confirm-modal');assert.equal(saved(windows),'Control+Alt+V');
 });
-test('a Linux shelf page fills a wide monitor and number badges stay on the first nine cards; Windows pages hold nine',async()=>{
- for(const [platform,cards,pages] of [['linux',14,2],['windows',9,3]]){
- const f=fixture({width:2560,platform});
- for(let index=0;index<20;index++)f.state.items.push({id:'10000000-0000-4000-8000-'+String(index).padStart(12,'0'),kind:'image',createdAt:5000+index,updatedAt:5000+index,name:'Wide '+index,title:'',text:'',url:'',pinned:false,folderIds:[],tags:[],trashedAt:null,hiddenFromShelf:false,mediaUrl:'appmedia://media/w'+index});
- await f.ready();await f.api.command('show');await f.ready();
- const row=f.main.slice(f.main.indexOf('data-shelf="image"'),f.main.indexOf('data-shelf="text"'));
- assert.equal((row.match(/<article class="card/g)||[]).length,cards,platform+': Linux fits (2560 - 24) / (150 + 24) medium cards');
- assert.deepEqual([...row.matchAll(/class="card-number"[^>]*>(\d+)</g)].map(match=>Number(match[1])),[1,2,3,4,5,6,7,8,9]);
- assert.match(row,new RegExp('1 / '+pages),platform+': 21 images');
- }
+test('Linux settings follow the selected language',async()=>{
+ const f=fixture({platform:'linux'});await f.ready();await f.api.command('settings');
+ f.api.emit({settings:{...f.state.settings,language:'tr'},linux:{session:'wayland',backend:'wayland',clipboardMonitor:'focused-polling',automaticPaste:false,missing:['wl-clipboard'],problem:'Install wl-clipboard for background clipboard capture on Wayland.'},update:{...f.state.update,status:'manual',message:'Install newer Linux releases as an AppImage, .deb or .rpm package.'}});await f.ready();
+ await f.click('settings-tab',{tab:'general'});for(const text of ['Tüm ekranı doldur','görev çubuğunu ve panelleri de kaplar'])assert.ok(f.main.includes(text),text);
+ await f.click('settings-tab',{tab:'sources'});for(const text of ['Linux entegrasyonu','Kopyalar yalnızca ClipBoardLine odaktayken yakalanır.','wl-clipboard’u kur','Ctrl+V’ye bas','İsteğe bağlı paketler','dağıtımının paketlerinden kur'])assert.ok(f.main.includes(text),text);
+ await f.click('settings-tab',{tab:'shortcuts'});for(const text of ['Linux kopyalama, yapıştırma','bir sistem kısayolu atayabilirsin','<code>clipboardline --toggle</code>'])assert.ok(f.main.includes(text),text);
+ await f.click('settings-tab',{tab:'updates'});for(const text of ['Sürümler sayfasını aç','Yeni Linux sürümlerini','Linux sürümleri kendini güncellemez'])assert.ok(f.main.includes(text),text);
 });
 
 test('export and shortcut-conflict notices follow the selected language',async()=>{

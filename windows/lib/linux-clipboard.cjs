@@ -25,8 +25,9 @@ function readProcess(file,args,{limit=TEXT_LIMIT,timeout=3000,input=null,spawner
   child.on('close',code=>{
    if(code===0)return finish(null,Buffer.concat(chunks));
    const error=new Error(stderr.trim().slice(0,300)||'Clipboard helper failed.');
-   // wl-paste and xclip report an empty clipboard or a missing type as a failure.
-   error.empty=/nothing is copied|no selection|clipboard content is not available|no suitable type|there is no owner|cannot convert .* to target/i.test(stderr);finish(error);
+   // wl-paste and xclip report an empty clipboard or a missing type as a failure;
+   // xclip 0.13 (Ubuntu 24.04) says "target TARGETS not available" when no one owns it.
+   error.empty=/nothing is copied|no selection|clipboard content is not available|no suitable type|there is no owner|cannot convert .* to target|target \S+ not available/i.test(stderr);finish(error);
   });
   if(input!==null){child.stdin.on('error',()=>{});child.stdin.end(input);}
  });
@@ -163,6 +164,16 @@ function pixelFingerprint(bytes,decode){
  return 'image:pixels:'+image.width+'x'+image.height+':'+crypto.createHash('sha256').update(image.bitmap).digest('hex');
 }
 
+// A Linux selection disappears with the app that copied it; Spectacle quits
+// right after copying a screenshot. Only that captured image is served again,
+// and only while its item is still on the shelf and nothing else was copied:
+// text, links and deleted copies stay gone, so a password manager's clear is
+// never undone.
+function keptCopy(kept,{fingerprint,items}){
+ if(kept?.kind!=='image'||!kept.fingerprint||kept.fingerprint!==fingerprint)return null;
+ return items.some(item=>item.id===kept.id&&!item.trashedAt&&!item.hiddenFromShelf)?kept:null;
+}
+
 function fileClipboard(files){
  const uris=files.map(file=>pathToFileURL(file).href);
  return{uriList:uris.join('\r\n')+'\r\n',gnome:'copy\n'+uris.join('\n')};
@@ -204,4 +215,4 @@ async function writeClipboard({clipboard,ClipboardItem,marker,text='',png=null,f
  }
  return{method:'wl-copy',type:primary.type};
 }
-module.exports={WaylandClipboard,X11Clipboard,WaylandWatchers,PollingSequence,clipboardSignature,pixelFingerprint,writeClipboard,fileClipboard,readProcess,copyProcess,TEXT_TYPES,FORMAT_MAP,MARKER_TYPE};
+module.exports={WaylandClipboard,X11Clipboard,WaylandWatchers,PollingSequence,clipboardSignature,pixelFingerprint,keptCopy,writeClipboard,fileClipboard,readProcess,copyProcess,TEXT_TYPES,FORMAT_MAP,MARKER_TYPE};

@@ -4,7 +4,7 @@ const linuxOnly={skip:process.platform==='win32'&&'Linux desktop integration'};
 const test=(name,options,body)=>typeof options==='function'?require('node:test').test(name,linuxOnly,options):require('node:test').test(name,{...options,...linuxOnly},body);
 const assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
-const {WaylandClipboard,X11Clipboard,WaylandWatchers,PollingSequence,clipboardSignature,pixelFingerprint,writeClipboard,fileClipboard,readProcess,copyProcess,FORMAT_MAP,MARKER_TYPE}=require('../lib/linux-clipboard.cjs');
+const {WaylandClipboard,X11Clipboard,WaylandWatchers,PollingSequence,clipboardSignature,pixelFingerprint,keptCopy,writeClipboard,fileClipboard,readProcess,copyProcess,FORMAT_MAP,MARKER_TYPE}=require('../lib/linux-clipboard.cjs');
 const {readClipboardContent}=require('../lib/clipboard-policy.cjs');
 const {plainURL}=require('../lib/model.cjs');
 
@@ -31,7 +31,7 @@ test('readProcess keeps at most limit+1 bytes, reports empty clipboards and enfo
   const small=readProcess('wl-paste',[],{spawner,limit:10});child.stdout.emit('data',Buffer.from('hello'));child.emit('close',0);assert.equal((await small).toString(),'hello');
   const large=readProcess('wl-paste',[],{spawner,limit:4});child.stdout.emit('data',Buffer.from('0123456789'));assert.equal((await large).toString(),'01234');assert.equal(child.killed,true);
   const empty=readProcess('wl-paste',[],{spawner});child.stderr.emit('data',Buffer.from('Nothing is copied\n'));child.emit('close',1);await assert.rejects(empty,error=>error.empty===true);
-  for(const message of ['xclip: Error: There is no owner for the CLIPBOARD selection',"xclip: Error: 'Chromium clipboard' (0x200000) cannot convert CLIPBOARD selection to target 'image/png'"]){const missing=readProcess('xclip',[],{spawner});child.stderr.emit('data',Buffer.from(message+'\n'));child.emit('close',1);await assert.rejects(missing,error=>error.empty===true,message);}
+  for(const message of ['xclip: Error: There is no owner for the CLIPBOARD selection','Error: target TARGETS not available',"xclip: Error: 'Chromium clipboard' (0x200000) cannot convert CLIPBOARD selection to target 'image/png'"]){const missing=readProcess('xclip',[],{spawner});child.stderr.emit('data',Buffer.from(message+'\n'));child.emit('close',1);await assert.rejects(missing,error=>error.empty===true,message);}
   const slow=readProcess('wl-paste',[],{spawner,timeout:5});await assert.rejects(slow,/timed out/);assert.equal(child.killed,true);
   const written=readProcess('wl-copy',[],{spawner,input:Buffer.from('in')});child.emit('close',0);await written;assert.deepEqual(child.stdin.written.map(String),['in']);
 });
@@ -167,4 +167,14 @@ test('xclip reads the X11 selection in its own process with raw target names and
   calls.length=0;const first=await clipboardSignature(clipboard);assert.deepEqual(calls.map(call=>call.args[4]),['TARGETS','TIMESTAMP'],'a timestamped copy is identified without reading it');
   offer={...offer,TIMESTAMP:'42150000\n'};assert.notEqual(await clipboardSignature(clipboard),first,'a new copy has a new timestamp');
   offer=null;assert.deepEqual(await clipboard.read(),[]);assert.deepEqual(await clipboard.types(),[]);
+});
+test('only a captured image still on the shelf is served again after its app quits',()=>{
+ const image={id:'a',kind:'image',value:Buffer.from('png'),fingerprint:'image:pixels:1'},shelf=[{id:'a',trashedAt:null,hiddenFromShelf:false}];
+ assert.equal(keptCopy(image,{fingerprint:'image:pixels:1',items:shelf}),image);
+ assert.equal(keptCopy(image,{fingerprint:'image:pixels:2',items:shelf}),null,'something else was copied since');
+ assert.equal(keptCopy(image,{fingerprint:'image:pixels:1',items:[]}),null,'a deleted item is not served again');
+ assert.equal(keptCopy(image,{fingerprint:'image:pixels:1',items:[{...shelf[0],trashedAt:1}]}),null,'a trashed item is not served again');
+ assert.equal(keptCopy(image,{fingerprint:'image:pixels:1',items:[{...shelf[0],hiddenFromShelf:true}]}),null,'an item taken down from the shelf is not served again');
+ for(const kind of ['text','link'])assert.equal(keptCopy({...image,kind},{fingerprint:'image:pixels:1',items:shelf}),null,kind+' is never served again, so a cleared password stays cleared');
+ assert.equal(keptCopy(null,{fingerprint:'',items:shelf}),null);assert.equal(keptCopy({...image,fingerprint:''},{fingerprint:'',items:shelf}),null);
 });

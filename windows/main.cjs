@@ -31,7 +31,7 @@ const {LinuxPasteTargets}=require('./lib/linux-native.cjs');
 const {setAutostart}=require('./lib/linux-autostart.cjs');
 const {portalScreenshot}=require('./lib/linux-screenshot.cjs');
 const {OverlayFocus}=require('./lib/linux-overlay.cjs');
-const {pixelFingerprint}=require('./lib/linux-clipboard.cjs');
+const {pixelFingerprint,keptCopy}=require('./lib/linux-clipboard.cjs');
 const {DragFiles}=require('./lib/drag-files.cjs');
 const {metadataFetch,linkMetadata} = require('./lib/network.cjs');
 const {Updates,AutomaticUpdateScheduler} = require('./lib/updates.cjs');
@@ -234,20 +234,19 @@ async function readClipboard() {
     if(content.owned)return;
     const key={image:'captureImages',text:'captureText',link:'captureLinks'}[content.kind];if(!store.data.settings[key])return;
     const item=store.insert(content.kind,content.value);broadcast();
-    if(linuxSession){keptClipboard={kind:content.kind,value:content.value,fingerprint:content.fingerprint};lastIds=[item.id];}
+    if(linuxSession){keptClipboard=item.kind==='image'?{id:item.id,kind:'image',value:content.value,fingerprint:content.fingerprint}:null;lastIds=[item.id];}
     if(item.kind==='link')void enrich(item.id);
     if(item.kind==='image'){queueOCR(item.id);refreshImageSearch();}
     if(item.kind==='image'&&store.data.settings.openAfterScreenshot&&!desiredVisible)await show('shelves',{selectId:item.id,kind:'image'});
   }catch(error){if(!error.stalled)notify('Clipboard capture: '+error.message);}finally{capturing=false;if(pendingClipboard){pendingClipboard=false;queueMicrotask(()=>void readClipboard());}}
 }
-// A Linux selection disappears with the app that copied it; Spectacle quits
-// right after copying a screenshot. Like the desktop's clipboard manager,
-// serve the item captured from it again, unless something else was copied.
+// Like the desktop's clipboard manager, serve a captured image again once the
+// app that copied it quits (keptCopy says which copies qualify).
 async function keepClipboard(){
-  const kept=keptClipboard;keptClipboard=null;
-  if(!kept||kept.fingerprint!==lastFingerprint||!await answered(native.clipboardEmpty()).catch(()=>false))return;
+  const kept=keptCopy(keptClipboard,{fingerprint:lastFingerprint,items:store.data.items});keptClipboard=null;
+  if(!kept||!await answered(native.clipboardEmpty()).catch(()=>false))return;
   ownWrites++;
-  try{await native.write({text:kept.kind==='image'?'':kept.value,png:kept.kind==='image'?kept.value:null,marker:copyMarker});ownFingerprint=(await clipboardContent().catch(()=>null))?.fingerprint||'';}
+  try{await native.write({text:'',png:kept.value,marker:copyMarker});ownFingerprint=(await clipboardContent().catch(()=>null))?.fingerprint||'';}
   catch{}
   finally{ownWrites--;if(!ownWrites&&pendingClipboard&&!capturing){pendingClipboard=false;queueMicrotask(()=>void readClipboard());}}
 }
@@ -440,7 +439,7 @@ async function command(action,payload={}) {
   message='';let result;
   if(action==='beginShortcutRecording')startShortcutRecording(payload.token);
   else if(action==='endShortcutRecording'){if(typeof payload.token==='string')finishShortcutRecording(payload.token);}
-  else if(modelActions.has(action)){if(action==='saveImage'){if(typeof payload.dataUrl!=='string'||payload.dataUrl.length>90_000_000)throw new Error('Invalid edited image');const decoded=nativeImage.createFromDataURL(payload.dataUrl);if(decoded.isEmpty()||decoded.getSize().width*decoded.getSize().height>80_000_000)throw new Error('Invalid edited image');}result=store.modify(action,payload);if(action==='saveImage')queueOCR(payload.id);if(['saveImage','remove','delete','trash','trashUndoably','undoTrash','restore','undo','cleanup','clearUnsavedHistory'].includes(action))refreshImageSearch();if(action==='remove'||action==='trash'||action==='trashUndoably'||action==='delete'||action==='clearUnsavedHistory')viewEvent={removedIds:['clearUnsavedHistory','trash','trashUndoably'].includes(action)?result.ids:payload.ids||[payload.id],serial:crypto.randomUUID()};}
+  else if(modelActions.has(action)){if(action==='saveImage'){if(typeof payload.dataUrl!=='string'||payload.dataUrl.length>90_000_000)throw new Error('Invalid edited image');const decoded=nativeImage.createFromDataURL(payload.dataUrl);if(decoded.isEmpty()||decoded.getSize().width*decoded.getSize().height>80_000_000)throw new Error('Invalid edited image');}result=store.modify(action,payload);if(action==='saveImage')queueOCR(payload.id);if(['saveImage','remove','delete','trash','trashUndoably','undoTrash','restore','undo','cleanup','clearUnsavedHistory'].includes(action))refreshImageSearch();if(action==='remove'||action==='trash'||action==='trashUndoably'||action==='delete'||action==='clearUnsavedHistory')viewEvent={removedIds:['clearUnsavedHistory','trash','trashUndoably'].includes(action)?result.ids:payload.ids||[payload.id],serial:crypto.randomUUID()};if(keptClipboard&&!onShelf([keptClipboard.id]))keptClipboard=null;}
   else if(action==='show'||action==='search')await show('shelves',action==='search'?{search:true}:null);
   else if(action==='hide'){if(pastePromise){pasteGeneration++;cancelNativePaste();}await hide();}
   else if(action==='library'||action==='settings')await show(action);
@@ -501,10 +500,11 @@ async function command(action,payload={}) {
     if(Object.hasOwn(patch,'watchFolders'))throw new Error('Choose watched folders with the folder picker.');
     const wasIndexingImages=!!store.data.settings.indexImages;
     const previousShortcuts={...store.data.settings.shortcuts};
-    // Apply the login item first: a refused autostart entry is not saved as enabled.
-    if(Object.hasOwn(patch,'launchAtLogin')&&typeof patch.launchAtLogin==='boolean'&&!testMode){if(linuxSession)setAutostart(patch.launchAtLogin,{command:linuxLaunchCommand()});else app.setLoginItemSettings({openAtLogin:patch.launchAtLogin});}
+    // A Linux autostart entry is written first, so a refused one is not saved as enabled.
+    if(linuxSession&&Object.hasOwn(patch,'launchAtLogin')&&typeof patch.launchAtLogin==='boolean'&&!testMode)setAutostart(patch.launchAtLogin,{command:linuxLaunchCommand()});
     store.modify('setSettings',{patch});if(wasIndexingImages&&!store.data.settings.indexImages)ocrQueue.discardPending();if(Object.hasOwn(patch,'retentionDays'))refreshImageSearch();if(Object.hasOwn(patch,'shortcuts')&&configureShortcuts(previousShortcuts).length)result={error:message};
     if(['captureText','captureImages','captureLinks'].some(key=>Object.hasOwn(patch,key))){lastGeneration.sequence=0;lastFingerprint='';monitor?.refresh?.();}
+    if(!linuxSession&&Object.hasOwn(patch,'launchAtLogin')&&!testMode)app.setLoginItemSettings({openAtLogin:patch.launchAtLogin});
     if(Object.hasOwn(patch,'autoCheckUpdates')&&patch.autoCheckUpdates&&!development)void updateScheduler.tick({force:true});
   }else if(action==='watchFolder'||action==='chooseWatchFolder'){const response=await openDialog({properties:['openDirectory']});if(response.filePaths[0]){store.modify('setSettings',{patch:{watchFolders:[...store.data.settings.watchFolders,response.filePaths[0]]}});configureWatchers();}}
   else if(action==='unwatchFolder'){const index=payload.index;if(!Number.isInteger(index)||index<0||index>=store.data.settings.watchFolders.length)throw new Error('Invalid watched folder');store.modify('setSettings',{patch:{watchFolders:store.data.settings.watchFolders.filter((_v,i)=>i!==index)}});configureWatchers();}
@@ -591,7 +591,11 @@ else app.whenReady().then(async()=>{
     powerMonitor.on('resume',()=>void updateScheduler.tick());
   }
   const initialAction=linuxAction(process.argv);
-  await show(initialAction==='library'?'library':'shelves',initialAction==='search'?{search:true}:null);
+  // Started by `clipboardline --screenshot` or `--copy-latest`, the app does that
+  // action, as a running app does, instead of only opening the line; a failure
+  // opens the line so its notice is seen.
+  if(initialAction==='screenshot'||initialAction==='copyLatest')await Promise.resolve().then(()=>globalActions[initialAction]()).catch(async error=>{notify(error.message);await show('shelves');});
+  else await show(initialAction==='library'?'library':'shelves',initialAction==='search'?{search:true}:null);
   // Test hooks are main-process only and require an explicit isolated data path.
   if(testMode&&testFolder)global.__clipboardLineTest={store,command,state,readClipboard,writeClipboard,clipboardContent,privateClipboard,importFile,getMediaJobs:()=>mediaJobs,getWindow:()=>window,getTray:()=>({tray,presentation:trayPresentation}),getTarget:()=>previous,setTarget:value=>{previous=value;},getObservedTarget:()=>pasteTargets.reenter(),getCaptureAdmissionState:()=>({capturing,pendingClipboard}),getShortcutRecordingState:()=>({token:shortcutRecording?.token||null,suspended:shortcutRegistry?.suspended||false}),getImageSearch:()=>imageSearch,getMediaDiagnostics:()=>mediaDiagnostics.map(value=>({...value})),enableShortcuts:configureShortcuts,getUpdates:()=>updates,setUpdates:value=>{updates=value;updates.changed=()=>broadcast();updates.available=updateAvailable;updateScheduler=new AutomaticUpdateScheduler(updates,{enabled:()=>store.data.settings.autoCheckUpdates});},getUpdateScheduler:()=>updateScheduler,capture,native};
 }).catch(error=>{dialog.showErrorBox('ClipBoardLine could not start',error.message);app.exit(1);});

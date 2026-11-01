@@ -44,10 +44,8 @@ jobs:
           python3 ../scripts/sync-windows-locales.py --check
           python3 ../scripts/test-cross-platform-parity.py
           python3 ../scripts/test-library-keyboard-parity.py
-      - name: Audit dependencies and run model, renderer and Linux adapter tests
-        run: |
-          npm audit --audit-level=moderate
-          npm test
+      - name: Run model, renderer and Linux adapter tests
+        run: npm test
         env:
           CLIPBOARDLINE_PARITY_REPORT: validation/parity/linux.json
       - name: Linux runtime acceptance on X11
@@ -93,3 +91,8 @@ jobs:
             windows/validation/**
           if-no-files-found: error
           retention-days: 14
+      # Last, so a dependency advisory fails the job without hiding the test
+      # and package evidence above.
+      - name: Audit dependencies
+        if: ${{ !cancelled() }}
+        run: npm audit --audit-level=moderate

@@ -52,6 +52,8 @@ test('link exports use each operating system native link file type',()=>{
   assert.deepEqual(linkFile('https://example.com/a?b=1',{platform:'win32'}),{extension:'.url',bytes:'[InternetShortcut]\r\nURL=https://example.com/a?b=1\r\n'});
   assert.deepEqual(linkFile('https://example.com/a?b=1',{platform:'linux'}),{extension:'.desktop',bytes:'[Desktop Entry]\nType=Link\nName=example.com\nURL=https://example.com/a?b=1\nIcon=text-html\n'});
   assert.throws(()=>linkFile('https://example.com/\nExec=x',{platform:'linux'}),/Invalid link/);
+  assert.match(linkFile('https://example.com/?q=a\\nb',{platform:'linux'}).bytes,/^URL=https:\/\/example\.com\/\?q=a\\\\nb$/m,'a backslash in the URL stays a backslash, not a newline');
+  assert.equal(linkFile('https://example.com/?q=a\\nb',{platform:'win32'}).bytes,'[InternetShortcut]\r\nURL=https://example.com/?q=a\\nb\r\n','Windows .url bytes are unchanged');
 });
 function fakeExec(responses){
   const calls=[];
@@ -115,6 +117,6 @@ test('removing the package unregisters the command, but an rpm or deb upgrade ke
   const values={executable:'clipboardline',sanitizedProductName:'ClipBoardLine'};
   fs.writeFileSync(script,fs.readFileSync(path.join(__dirname,'../scripts/linux-after-remove.sh'),'utf8').replace(/\$\{([a-zA-Z]+)\}/g,(_match,key)=>values[key]));
   const run=argument=>{fs.rmSync(calls,{force:true});execFileSync('bash',[script,argument],{env:{...process.env,PATH:bin+path.delimiter+process.env.PATH,CALLS:calls}});return fs.existsSync(calls)?fs.readFileSync(calls,'utf8').trim():'';};
-  for(const upgrade of ['1','2','upgrade'])assert.equal(run(upgrade),'','an upgrade keeps the command: '+upgrade);
+  for(const upgrade of ['1','2','upgrade','failed-upgrade','abort-upgrade'])assert.equal(run(upgrade),'','an upgrade keeps the command: '+upgrade);
   for(const removal of ['0','remove','purge'])assert.equal(run(removal),'--remove clipboardline /opt/ClipBoardLine/clipboardline','removal unregisters it: '+removal);
 });

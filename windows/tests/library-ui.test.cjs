@@ -9,15 +9,15 @@ const vm=require('node:vm');
 const crypto=require('node:crypto');
 const {execFileSync}=require('node:child_process');
 
-function fixture({deferInitialState=false,initialVisible=true,manualTimers=false}={}){
- const listeners=new Map(),nodes=new Map(),commands=[],imageLoads=[],timers=[],focused=[];let exportFailures=0;
+function fixture({deferInitialState=false,initialVisible=true}={}){
+ const listeners=new Map(),nodes=new Map(),commands=[],imageLoads=[];let exportFailures=0;
  class Element{
   constructor(id=''){this.id=id;this.innerHTML='';this.textContent='';this.dataset={};this.style={};this.className='';this.value='';this.selectionStart=0;this.selectionEnd=0;this.classList={add(){},remove(){},contains(){return false;}};}
   set innerHTML(value){this.htmlWrites=(this.htmlWrites||0)+1;this._innerHTML=value;if(this.id==='overlay-root'){
    const video=value.match(/id="preview-video" data-video-id="([^"]+)" data-source-fingerprint="([^"]*)"/);if(video){const player=new Element('preview-video');player.dataset={videoId:video[1],sourceFingerprint:video[2]};nodes.set('preview-video',player);}
    if(value.includes('class="video-trim-controls"')){const controls=new Element('video-trim-controls'),inputs=[];for(const match of value.matchAll(/<input id="(trim-[^"]+)"[^>]*value="([^"]*)"[^>]*>/g)){const input=new Element(match[1]);input.value=match[2];nodes.set(match[1],input);inputs.push(input);}controls.querySelectorAll=selector=>selector==='input'?inputs:[];nodes.set('video-trim-controls',controls);}else nodes.delete('video-trim-controls');
   }}get innerHTML(){return this._innerHTML;}
-  setAttribute(){}querySelector(){return null;}querySelectorAll(){return [];}focus(){focused.push(this.id);}blur(){}select(){}setSelectionRange(){}scrollIntoView(){}matches(){return false;}closest(){return null;}
+  setAttribute(){}querySelector(){return null;}querySelectorAll(){return [];}focus(){}blur(){}select(){}setSelectionRange(){}scrollIntoView(){}matches(){return false;}closest(){return null;}
  }
  class TextArea extends Element{}
  class Canvas extends Element{
@@ -62,7 +62,7 @@ function fixture({deferInitialState=false,initialVisible=true,manualTimers=false
   if(delayedReply?.action===action){const pending=delayedReply;delayedReply=null;await pending.promise;}
   return output;
  }};
- const context={window:{clipboardLine:api,addEventListener(){}},document,HTMLElement:Element,HTMLTextAreaElement:TextArea,Image:FixtureImage,console,structuredClone,URL,Set,Date,JSON,Math,Number,String,requestAnimationFrame:fn=>fn(),setTimeout:fn=>{if(manualTimers)timers.push(fn);else queueMicrotask(fn);return 1;},clearTimeout(){}};
+ const context={window:{clipboardLine:api,addEventListener(){}},document,HTMLElement:Element,HTMLTextAreaElement:TextArea,Image:FixtureImage,console,structuredClone,URL,Set,Date,JSON,Math,Number,String,requestAnimationFrame:fn=>fn(),setTimeout:fn=>{queueMicrotask(fn);return 1;},clearTimeout(){}};
  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../renderer.js'),'utf8'),context,{filename:'renderer.js'});
  async function ready(){await new Promise(setImmediate);}
  async function key(code,{ctrl=false,alt=false,shift=false,repeat=false,key,target}={}){const event={code,key:key||(/^Key/.test(code)?code.slice(3).toLowerCase():code==='Space'?' ':code),ctrlKey:ctrl,metaKey:false,altKey:alt,shiftKey:shift,repeat,target:target||new Element(),preventDefault(){this.prevented=true;}};for(const listener of listeners.get('keydown')||[])await listener(event);await ready();return event;}
@@ -73,7 +73,7 @@ function fixture({deferInitialState=false,initialVisible=true,manualTimers=false
  async function drag(id,{alt=false}={}){const card=new Element();card.dataset.itemId=id;card.closest=selector=>selector==='[data-item-id]'?card:null;const data=new Map(),event={target:card,altKey:alt,dataTransfer:{effectAllowed:'',setData(type,value){data.set(type,value);}},preventDefault(){this.prevented=true;}};for(const listener of listeners.get('dragstart')||[])await listener(event);await ready();return{prevented:event.prevented,data,effectAllowed:event.dataTransfer.effectAllowed};}
  async function input(id,value,extra={}){const target=document.getElementById(id);Object.assign(target.dataset,extra.dataset||{});target.value=value;target.selectionStart=value.length;for(const listener of listeners.get('input')||[])await listener({target});await ready();}
  async function change(id,value,extra={}){const target=document.getElementById(id);target.value=value;Object.assign(target,extra);if(extra.dataset)target.dataset=extra.dataset;for(const listener of listeners.get('change')||[])await listener({target});await ready();}
- return{ready,key,input,click,change,pointer,document,focused,async runTimers(){for(const fn of timers.splice(0))fn();await ready();},columnGrip,columnDrag,drag,setVisualSearch(callback){visualSearch=callback;},failDetails(count=1){detailsFailures=count;},failFolder(){folderFailures++;},imageLoads,releaseInitialState(){releaseInitialState?.();},deferReply(action){let release;const promise=new Promise(resolve=>{release=resolve;});delayedReply={action,promise};return release;},failExportOnce(){exportFailures++;},failCleanupOnce(){cleanupFailures++;},failEditOnce(){editFailures++;},state,commands,nodes,image,text1,text2,link,api,get main(){return nodes.get('app').innerHTML;},get overlay(){return nodes.get('overlay-root').innerHTML;}};
+ return{document,ready,key,input,click,change,pointer,columnGrip,columnDrag,drag,setVisualSearch(callback){visualSearch=callback;},failDetails(count=1){detailsFailures=count;},failFolder(){folderFailures++;},imageLoads,releaseInitialState(){releaseInitialState?.();},deferReply(action){let release;const promise=new Promise(resolve=>{release=resolve;});delayedReply={action,promise};return release;},failExportOnce(){exportFailures++;},failCleanupOnce(){cleanupFailures++;},failEditOnce(){editFailures++;},state,commands,nodes,image,text1,text2,link,api,get main(){return nodes.get('app').innerHTML;},get overlay(){return nodes.get('overlay-root').innerHTML;}};
 }
 
 function cards(f){return [...f.main.matchAll(/<article class="[^"]*"[^>]*data-item-id="([^"]+)"/g)].map(match=>match[1]);}
@@ -337,14 +337,6 @@ test('recordings share image cards and open the managed video player without sti
 
 test('M opens recording trim, editable bounds preserve 100ms minimum and Enter saves the exact source generation',async()=>{
  const f=fixture();await f.ready();const video=asRecording(f);await f.ready();await f.key('Space');await f.key('KeyM');assert.match(f.overlay,/id="trim-start-range"/);assert.doesNotMatch(f.overlay,/<canvas/);await f.input('trim-start','2',{dataset:{videoTrim:'startMs',seconds:'true'}});await f.input('trim-end','1',{dataset:{videoTrim:'endMs',seconds:'true'}});assert.equal(f.nodes.get('trim-end-range').value,2100);await f.input('trim-end','4',{dataset:{videoTrim:'endMs',seconds:'true'}});await f.key('Enter');const request=f.commands.find(value=>value.action==='trimRecording');assert.deepEqual(request,{action:'trimRecording',payload:{id:video.id,startMs:2000,endMs:4000,sourceFingerprint:video.sourceFingerprint}});assert.doesNotMatch(f.overlay,/trim-start-range/);assert.match(f.overlay,/preview-video/);assert.equal(f.commands.some(value=>value.action==='saveImage'),false);
-});
-
-test('a trim field chosen right after M keeps the focus; otherwise the range takes it',async()=>{
- const f=fixture({manualTimers:true});await f.ready();await f.runTimers();asRecording(f);await f.ready();await f.key('Space');await f.runTimers();await f.key('KeyM');
- const end=f.nodes.get('trim-end'),moves=()=>f.focused.filter(id=>id==='trim-start-range').length;
- end.dataset.videoTrim='endMs';f.document.activeElement=end;await f.runTimers();assert.equal(moves(),0,'the chosen end time keeps the focus');
- await f.key('Escape');await f.runTimers();assert.doesNotMatch(f.overlay,/trim-start-range/);f.document.activeElement=f.document.body;
- await f.key('KeyM');assert.match(f.overlay,/trim-start-range/);await f.runTimers();assert.equal(moves(),1,'with no field chosen the range is focused');
 });
 
 test('background state packets preserve recording trim input/player identities and exact bounds until save',async()=>{

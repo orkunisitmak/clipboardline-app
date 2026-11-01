@@ -2,10 +2,11 @@
 
 # electron-builder's after-remove, kept for upgrades. rpm runs the old
 # package's %postun after the new package's %post, passing the number of
-# copies left installed (0 only on removal); dpkg passes "upgrade". Removing
-# the link then would delete the command the new package just installed.
+# copies left installed (0 only on removal); dpkg passes "upgrade", and
+# "failed-upgrade" or "abort-upgrade" when an upgrade is rolled back with a
+# package still installed. Removing the link then would delete its command.
 case "$1" in
-  [1-9]*|upgrade) exit 0 ;;
+  [1-9]*|upgrade|failed-upgrade|abort-upgrade) exit 0 ;;
 esac
 
 # Delete the link to the binary
