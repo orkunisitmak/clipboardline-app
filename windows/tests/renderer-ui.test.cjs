@@ -524,6 +524,13 @@ test('Settings records and directly disables optional global Library and copy-la
  await f.click('disable-global',{keyAction:'copyLatest'});assert.equal(f.commands.filter(value=>value.action==='setSettings').at(-1).payload.patch.shortcuts.copyLatest,'');
 });
 
+test('Settings exposes private mode in Sources and as an optional global shortcut',async()=>{
+ const f=fixture();await f.ready();await f.api.command('settings');await f.ready();
+ await f.click('settings-tab',{tab:'sources'});assert.match(f.main,/data-setting="paused"/);assert.match(f.main,/Private mode/);
+ await f.click('settings-tab',{tab:'shortcuts'});assert.match(f.main,/data-action="record-global" data-key-action="pause"/);
+ assert.match(f.main,/Private mode/);
+});
+
 for(const [width,height]of[[3840,2160],[7680,4320]])test('retained '+width+'×'+height+' markup coalesces pointer painting without dropping samples or copying the original',async()=>{
  const f=fixture({queuedAnimationFrames:true,imageRaster:{width,height}});await f.ready();await f.key('Space');f.flushAnimationFrames();await f.key('KeyM');f.flushAnimationFrames();await f.click('image-tool',{tool:'pen'});f.flushAnimationFrames();f.paintCalls.length=0;
  await f.pointer('pointerdown',90,44);for(let index=1;index<=96;index++)await f.pointer('pointermove',90+index*6,44+index);await f.pointer('pointerup',666,140);

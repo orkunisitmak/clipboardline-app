@@ -37,7 +37,17 @@ module.exports=async function clipboardAdmissionAcceptance({application,check}){
    };
    const remaining=await snapshot();
    if(remaining!==baseline||readCalls<2||payloadReads!==0)throw new Error('Raced native private replacement was not discarded/retried.');
-   return{privateCases,textCases,nativeQueries:true,fallback:true,racedReadCalls:readCalls,payloadReads,historyUnchanged:remaining===baseline};
+   // Private mode adopts the paused generation: the copy made while paused is
+   // skipped on resume, while a later copy is admitted normally.
+   const beforePause=api.store.data.items.length;
+   api.store.modify('setSettings',{patch:{paused:true}});
+   await clipboard.writeText('synthetic private mode pause');
+   if(await snapshot()!==beforePause)throw new Error('Private mode admitted a paused copy.');
+   api.store.modify('setSettings',{patch:{paused:false}});
+   if(await snapshot()!==beforePause)throw new Error('Private mode replayed the paused copy on resume.');
+   await clipboard.writeText('synthetic private mode resume');
+   if(await snapshot()!==beforePause+1)throw new Error('Private mode blocked a copy after resume.');
+   return{privateCases,textCases,nativeQueries:true,fallback:true,racedReadCalls:readCalls,payloadReads,historyUnchanged:remaining===baseline,privateMode:true};
   }finally{clipboard.read=originalRead;await idle();}
  },{contract});
  assert.equal(result.privateCases,contract.privateMarkers.length*2);assert.equal(result.textCases,contract.textCases.length);

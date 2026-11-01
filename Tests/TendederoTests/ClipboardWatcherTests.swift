@@ -176,6 +176,33 @@ final class ClipboardWatcherTests: ClipboardTestCase {
     }
 
     @MainActor
+    func testPrivateModeSkipsThePausedCopyAndNeverReplaysItAfterResume() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let source = FakeClipboard()
+        var paused = true
+        var received: [URL] = []
+        let watcher = ClipboardWatcher(source: source, folder: folder, onImage: { received.append($0) }, isPaused: { paused })
+        defer {
+            watcher.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        watcher.start()
+        source.copy([.png: try imageData(.png)])
+        watcher.check()
+        XCTAssertTrue(received.isEmpty)
+        XCTAssertTrue(source.dataReads.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+
+        paused = false
+        watcher.check()
+        XCTAssertTrue(received.isEmpty)
+
+        source.copy([.png: try imageData(.png)])
+        watcher.check()
+        XCTAssertEqual(received.count, 1)
+    }
+
+    @MainActor
     func testStartingTwiceDoesNotResetBaselineOrDuplicateTimer() throws {
         try withWatcher { watcher, source, _, received in
             watcher.start()
