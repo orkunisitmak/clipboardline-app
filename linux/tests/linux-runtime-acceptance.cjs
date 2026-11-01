@@ -12,6 +12,8 @@ if(process.platform!=='linux')throw new Error('Run Linux runtime acceptance on a
 if(!process.env.WAYLAND_DISPLAY&&!process.env.DISPLAY)throw new Error('Linux runtime acceptance needs a Wayland or X11 display.');
 const output=path.resolve(process.env.CLIPBOARDLINE_VALIDATION||'validation/linux');fs.mkdirSync(output,{recursive:true});
 const data=fs.mkdtempSync(path.join(os.tmpdir(),'clipboardline-linux-runtime-'));
+// mkdtemp already creates 0700; open it so the check below proves the app restricts it.
+fs.chmodSync(data,0o755);
 const tools=linuxTools(),executable=process.env.CLIPBOARDLINE_EXECUTABLE?path.resolve(process.env.CLIPBOARDLINE_EXECUTABLE):null;
 const report={platform:process.platform,arch:process.arch,sourceRevision:process.env.GITHUB_SHA||'',packaged:!!executable,environment:{sessionType:process.env.XDG_SESSION_TYPE||'',desktop:process.env.XDG_CURRENT_DESKTOP||'',wayland:!!process.env.WAYLAND_DISPLAY,x11:!!process.env.DISPLAY},checks:[],skipped:[]};
 const check=(name,details={})=>{report.checks.push({name,passed:true,...details});console.log('PASS '+name);};

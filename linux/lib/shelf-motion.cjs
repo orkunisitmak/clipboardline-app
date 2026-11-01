@@ -8,7 +8,7 @@
   cancel(){if(!this.pending)return;const pending=this.pending;this.pending=null;this.cancelTimer(pending.timer);pending.resolve({completed:false});}
   request(phase,details={}){
    this.cancel();const token=++this.serial;
-   return new Promise(resolve=>{const pending={token,phase,resolve,timer:null};this.pending=pending;pending.timer=this.schedule(()=>{if(this.pending!==pending)return;this.pending=null;resolve({completed:true,timedOut:true});},(phase==='open'?OPEN_MS:phase==='close'?CLOSE_MS:0)+(Number(details.after)||0)+1000);this.send({token,phase,...details});});
+   return new Promise(resolve=>{const pending={token,phase,resolve,timer:null};this.pending=pending;pending.timer=this.schedule(()=>{if(this.pending!==pending)return;this.pending=null;resolve({completed:true,timedOut:true});},(phase==='open'?OPEN_MS:phase==='close'?CLOSE_MS:0)+(Number(details.after)||0)+1000);try{this.send({token,phase,...details});}catch{this.cancel();}});
   }
   acknowledge(value){if(!value||!this.pending||value.token!==this.pending.token||value.phase!==this.pending.phase||typeof value.completed!=='boolean')return false;const pending=this.pending;this.pending=null;this.cancelTimer(pending.timer);pending.resolve({completed:value.completed});return true;}
  }
@@ -50,7 +50,7 @@
   lift(pending){
    this.warm=false;this.lifted=true;this.body.dataset.shelfMotion='opening';this.phase='open';
    this.animation=this.body.animate([{transform:this.offscreen(),opacity:1},{transform:pending.target,opacity:1}],{duration:OPEN_MS,easing:OPEN_CURVE,fill:'both'});
-   this.animation.finished.then(()=>this.finish(pending),()=>{if(this.pending===pending){this.pending=null;pending.resolve({completed:false});}});
+   this.animation.finished.then(()=>this.finish(pending),()=>this.finish(pending));
   }
   slide(pending,from){
    // Keep the warmed layer tree: dropping opacity from it would re-raster.
@@ -58,7 +58,7 @@
    if(this.motion?.matches||!this.body.animate){this.finish(pending);return;}
    this.body.style.transform=pending.target;
    this.animation=this.body.animate([{transform:from},{transform:pending.target}],{duration:pending.phase==='open'?OPEN_MS:CLOSE_MS,easing:pending.phase==='open'?OPEN_CURVE:CLOSE_CURVE,fill:'both'});
-   this.animation.finished.then(()=>this.finish(pending),()=>{if(this.pending===pending){this.pending=null;pending.resolve({completed:false});}});
+   this.animation.finished.then(()=>this.finish(pending),()=>this.finish(pending));
   }
  }
  const exports={MotionBridge,ShelfMotion,OPEN_MS,CLOSE_MS,OPEN_CURVE,CLOSE_CURVE};

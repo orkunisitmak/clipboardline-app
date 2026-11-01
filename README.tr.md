@@ -352,6 +352,8 @@ isteğe bağlı dağıtım paketleridir, pakete eklenmez.
 ```sh
 cd linux
 npm ci
+# Çevrimdışı görsel arama modelleri; paketler bunları içermelidir:
+python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP
 npm test
 npm start
 npm run dist:linux     # dist/ içinde AppImage, .deb ve .rpm

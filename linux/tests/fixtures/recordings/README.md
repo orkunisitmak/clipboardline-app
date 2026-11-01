@@ -25,14 +25,14 @@ tracks, preserve the red/green poster checks and leave the original unchanged.
 To regenerate functionally equivalent fixtures on macOS:
 
 ```sh
-xcrun swift windows/tests/generate-recording-fixtures.swift /tmp/synthetic-recordings
+xcrun swift linux/tests/generate-recording-fixtures.swift /tmp/synthetic-recordings
 ```
 
 To derive only the silent fixture from an existing generated
 `synthetic-rgb-tone.mp4` without touching either tone fixture:
 
 ```sh
-xcrun swift windows/tests/generate-recording-fixtures.swift windows/tests/fixtures/recordings --silent-only
+xcrun swift linux/tests/generate-recording-fixtures.swift linux/tests/fixtures/recordings --silent-only
 ```
 
 Container metadata and encoder versions can change bytes across regenerations.

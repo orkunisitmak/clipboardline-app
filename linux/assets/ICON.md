@@ -14,6 +14,6 @@ Linux packages install the freedesktop hicolor sizes from `assets/linux-icons`
 (16–512px), rendered from the same PNG on any platform with Electron:
 
 ```sh
-cd windows
+cd linux
 npx electron scripts/make-linux-icons.cjs assets/clipboardline.png assets/linux-icons
 ```

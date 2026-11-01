@@ -19,9 +19,13 @@ Build the packages (see [Development](#development-and-validation)) or download
 them from a release that lists Linux assets.
 
 ```sh
-# Fedora, openSUSE and other RPM distributions
+# Fedora and other dnf-based RPM distributions
 sudo dnf install ./ClipBoardLine-1.7.8-x86_64.rpm
 sudo dnf install wl-clipboard xclip ffmpeg-free     # recommended extras
+
+# openSUSE Tumbleweed and Leap (the package is not signed)
+sudo zypper install --allow-unsigned-rpm ./ClipBoardLine-1.7.8-x86_64.rpm
+sudo zypper install wl-clipboard xclip ffmpeg-7     # recommended extras
 
 # Ubuntu, Debian and derivatives (apt also installs the recommended extras)
 sudo apt install ./ClipBoardLine-1.7.8-amd64.deb
@@ -83,7 +87,7 @@ Shortcuts**.
 | Package | Enables |
 | --- | --- |
 | `wl-clipboard` | Background capture and copying while hidden on KDE and wlroots compositors |
-| `ffmpeg` (`ffmpeg-free` on Fedora) | Importing, posters and trimming of `.mp4`/`.mov` recordings |
+| `ffmpeg` (`ffmpeg-free` on Fedora, `ffmpeg-7` on openSUSE) | Importing, posters and trimming of `.mp4`/`.mov` recordings |
 | `xclip` | Reliable clipboard reading under X11 and GNOME's Xwayland: a copy whose app quits mid-transfer cannot stall capture |
 | `xdotool` | Automatic paste with Ctrl+Enter under X11 |
 | `xdg-desktop-portal` with your desktop's backend | Wayland screenshots and global shortcuts (installed by default on desktop editions) |
@@ -152,9 +156,13 @@ kütüphane ve ayarlar korunur.
 ### Paket kurulumu
 
 ```sh
-# Fedora, openSUSE ve diğer RPM dağıtımları
+# Fedora ve dnf kullanan diğer RPM dağıtımları
 sudo dnf install ./ClipBoardLine-1.7.8-x86_64.rpm
 sudo dnf install wl-clipboard xclip ffmpeg-free     # önerilen ek paketler
+
+# openSUSE Tumbleweed ve Leap (paket imzalı değildir)
+sudo zypper install --allow-unsigned-rpm ./ClipBoardLine-1.7.8-x86_64.rpm
+sudo zypper install wl-clipboard xclip ffmpeg-7     # önerilen ek paketler
 
 # Ubuntu, Debian ve türevleri (apt önerilen ek paketleri de kurar)
 sudo apt install ./ClipBoardLine-1.7.8-amd64.deb
@@ -210,7 +218,7 @@ altından ekleyin.
 ### İsteğe bağlı paketler
 
 - `wl-clipboard`: KDE ve wlroots ortamlarında arka planda toplama ve gizliyken kopyalama.
-- `ffmpeg` (Fedora’da `ffmpeg-free`): `.mp4`/`.mov` kayıtlarını içe aktarma, küçük görsel ve kırpma.
+- `ffmpeg` (Fedora’da `ffmpeg-free`, openSUSE’da `ffmpeg-7`): `.mp4`/`.mov` kayıtlarını içe aktarma, küçük görsel ve kırpma.
   Kırpma H.264/AAC MP4 yazar; çalışan H.264 kodlayıcı yoksa (Fedora’da Cisco
   OpenH264 gerekir) önizlemenin oynatabildiği VP9/Opus MP4 yazar. FFmpeg uygulama
   tarafından indirilmez.

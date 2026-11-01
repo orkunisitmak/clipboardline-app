@@ -54,7 +54,7 @@ class Updates {
   }
   newer(manifest){return manifest.build>this.build&&compareVersions(manifest.version,this.version)>=0;}
   derive(){this.state.busy=['checking','downloading','installing'].includes(this.state.status);this.state.availableVersion=this.manifest?.version||null;this.state.availableBuild=this.manifest?.build||null;this.state.canInstall=!!this.manifest&&!this.state.busy;}
-  set(state) { this.state = {...this.state, ...state};this.derive();try{this.changed();}catch{} }
+  set(state) { this.state = {...this.state, ...state};this.derive();try{this.changed();}catch(err){console.warn('Update state change callback error:',err?.message||err);} }
   safeDirectory(){fs.mkdirSync(this.directory,{recursive:true,mode:0o700});if(fs.lstatSync(this.directory).isSymbolicLink())throw new Error('Unsafe update cache');}
   cachePath(){return path.join(this.directory,'update-state.json');}
   save(){
@@ -63,7 +63,7 @@ class Updates {
     try{fs.writeFileSync(temporary,JSON.stringify({envelope:this.envelope?.toString('base64'),checkedAt:this.state.checkedAt,lastAttemptAt:this.state.lastAttemptAt,announcedBuild:this.announcedBuild,installer:this.installer?path.basename(this.installer):null}),{flag:'wx',mode:0o600});fs.renameSync(temporary,destination);}
     finally{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
   }
-  saveQuietly(){try{this.save();}catch{}}
+  saveQuietly(){try{this.save();}catch(err){console.warn('Update cache save error:',err?.message||err);}}
   restore(){
     try{
       if(fs.lstatSync(this.directory).isSymbolicLink())return;const cache=this.cachePath(),stat=fs.lstatSync(cache);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>400000)return;
@@ -93,7 +93,7 @@ class Updates {
         this.set({status:this.manifest?(this.installer?'ready':'available'):'current',version:manifest.version,message:this.manifest?`ClipBoardLine ${manifest.version} is available.`:'You are up to date.',checkedAt:this.clock(),error:null});
         this.saveQuietly();this.announce();
       } catch (error) {
-        this.set({status:this.manifest?(this.installer?'ready':'available'):'error',error:String(error.message).slice(0,300),message:'Update check failed: '+String(error.message).slice(0,300)});
+        this.set({status:this.manifest?(this.installer?'ready':'available'):'error',error:String(error.message).slice(0,300),message:'Update check failed: '+String(error.message).slice(0,300),lastAttemptAt:this.clock()});
       }return this.state;
     });
     this.checkPromise=operation;operation.finally(()=>{if(this.checkPromise===operation)this.checkPromise=null;});return operation;

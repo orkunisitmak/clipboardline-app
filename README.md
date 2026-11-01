@@ -352,6 +352,8 @@ Linux packages contain the same components and notices as the Windows edition; F
 ```sh
 cd linux
 npm ci
+# Offline image search models; packages must bundle them:
+python3 ../scripts/prepare-windows-search-models.py --config search-model-config.json --output assets/CLIP
 npm test
 npm start
 npm run dist:linux     # AppImage, .deb and .rpm in dist/

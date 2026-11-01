@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['linux/**', 'contracts/**', 'scripts/check-cross-platform-parity.py', 'scripts/test-cross-platform-parity.py', 'scripts/check-library-keyboard-parity.py', 'scripts/test-library-keyboard-parity.py', '.github/workflows/linux.yml']
+    paths: ['linux/**', 'contracts/**', 'scripts/check-cross-platform-parity.py', 'scripts/test-cross-platform-parity.py', 'scripts/check-library-keyboard-parity.py', 'scripts/test-library-keyboard-parity.py', 'scripts/check-release-version.py', 'scripts/sync-windows-locales.py', 'scripts/test-windows-search-models.py', 'scripts/prepare-windows-search-models.py', '.github/workflows/linux.yml']
   pull_request:
-    paths: ['linux/**', 'contracts/**', 'scripts/check-cross-platform-parity.py', 'scripts/test-cross-platform-parity.py', 'scripts/check-library-keyboard-parity.py', 'scripts/test-library-keyboard-parity.py', '.github/workflows/linux.yml']
+    paths: ['linux/**', 'contracts/**', 'scripts/check-cross-platform-parity.py', 'scripts/test-cross-platform-parity.py', 'scripts/check-library-keyboard-parity.py', 'scripts/test-library-keyboard-parity.py', 'scripts/check-release-version.py', 'scripts/sync-windows-locales.py', 'scripts/test-windows-search-models.py', 'scripts/prepare-windows-search-models.py', '.github/workflows/linux.yml']
 permissions:
   contents: read
 jobs:
