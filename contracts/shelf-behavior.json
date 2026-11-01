@@ -94,6 +94,12 @@
         "behavior": "An item without a name is titled by its content: a text by its first line that is not blank, with surrounding spaces and tabs removed and at most 120 grapheme clusters (lines end at LF or CRLF) and the localized \"Untitled note\" when every line is blank, a link by its fetched page title or else its host name and the localized \"Link\" when the stored URL does not parse, so an indented snippet or a long copied URL reads the same on both platforms.",
         "macos": "LibraryRecord.displayTitle returns the first non-blank line, trimmed and capped at 120 characters (Characters are grapheme clusters), or L(\"Untitled note\") for an all-blank text, and the metadata title, the URL host or L(\"Link\") for a link; LibraryInteractionTests.testUnnamedItemTitlesAreTheTrimmedFirstLineAndLinkHostLikeWindows covers it.",
         "windows": "title() in renderer.js applies the same rule (t('Untitled note') and t('Link') as fallbacks) to cards, title sorting and best-match ranking; library-ui.test.cjs runs the unnamed item titles scenario."
+      },
+      {
+        "id": "private-mode",
+        "behavior": "Private mode is one persisted on/off choice, available from Settings and the application menu, with an optional global shortcut that is off by default. While it is on, no new clipboard copies, screenshots or watched-folder images are collected: the change is adopted so nothing copied during the pause is imported when capture resumes, existing history and saved items are untouched, and the state is visible in the menu and status area.",
+        "macos": "CapturePause stores the choice; ClipboardWatcher, TextClipboardWatcher and ScreenshotWatcher skip new content while it is on, Inbox restores the user's own screenshot destination for the pause, and AppDelegate exposes the Settings toggle, the status-menu item, the status tooltip and the optional global shortcut.",
+        "windows": "The paused setting gates readClipboard (adopting the current native sequence), closes watched-folder watchers, refuses explicit capture while paused, rebuilds the tray menu checkbox, and the optional pause global shortcut is handled by GlobalShortcuts; the Sources toggle and the shortcut row share the same labels."
       }
     ]
   },

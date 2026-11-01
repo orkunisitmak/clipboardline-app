@@ -37,10 +37,31 @@ module.exports=async function clipboardAdmissionAcceptance({application,check}){
    };
    const remaining=await snapshot();
    if(remaining!==baseline||readCalls<2||payloadReads!==0)throw new Error('Raced native private replacement was not discarded/retried.');
-   return{privateCases,textCases,nativeQueries:true,fallback:true,racedReadCalls:readCalls,payloadReads,historyUnchanged:remaining===baseline};
+   // Private mode adopts the paused generation: the copy made while paused is
+   // skipped on resume, while a later copy is admitted normally.
+   const beforePause=api.store.data.items.length;
+   api.store.modify('setSettings',{patch:{paused:true}});
+   await clipboard.writeText('synthetic private mode pause');
+   if(await snapshot()!==beforePause)throw new Error('Private mode admitted a paused copy.');
+   api.store.modify('setSettings',{patch:{paused:false}});
+   if(await snapshot()!==beforePause)throw new Error('Private mode replayed the paused copy on resume.');
+   await clipboard.writeText('synthetic private mode resume');
+   if(await snapshot()!==beforePause+1)throw new Error('Private mode blocked a copy after resume.');
+   // Turning private mode on while the clipboard is being read must drop that
+   // capture and adopt its generation instead of saving it.
+   const beforePauseRace=api.store.data.items.length;
+   let pauseOnRead=true;
+   clipboard.read=async()=>{const entries=await originalRead();if(pauseOnRead){pauseOnRead=false;api.store.modify('setSettings',{patch:{paused:true}});}return entries;};
+   await clipboard.writeText('synthetic pause during read');
+   if(await snapshot()!==beforePauseRace)throw new Error('Private mode saved a copy that finished while pausing.');
+   api.store.modify('setSettings',{patch:{paused:false}});
+   if(await snapshot()!==beforePauseRace)throw new Error('Private mode replayed the copy captured while pausing.');
+   await clipboard.writeText('synthetic copy after the pause race');
+   if(await snapshot()!==beforePauseRace+1)throw new Error('Private mode blocked a copy after the pause race.');
+   return{privateCases,textCases,nativeQueries:true,fallback:true,racedReadCalls:readCalls,payloadReads,historyUnchanged:remaining===baseline,privateMode:true,pauseRace:true};
   }finally{clipboard.read=originalRead;await idle();}
  },{contract});
  assert.equal(result.privateCases,contract.privateMarkers.length*2);assert.equal(result.textCases,contract.textCases.length);
- assert.ok(result.nativeQueries&&result.fallback&&result.historyUnchanged);assert.ok(result.racedReadCalls>=2);assert.equal(result.payloadReads,0);
+ assert.ok(result.nativeQueries&&result.fallback&&result.historyUnchanged&&result.privateMode&&result.pauseRace);assert.ok(result.racedReadCalls>=2);assert.equal(result.payloadReads,0);
  check('native clipboard admission excludes private and blank copies, preserves exact text and rejects raced replacements',result);
 };

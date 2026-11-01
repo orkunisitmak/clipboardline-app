@@ -104,7 +104,7 @@ function createTray(){
   tray=new Tray(appIcon());
   trayPresentation=new StatusTray({tray,createIcon:summary=>trayIcon(nativeImage,appIcon(),summary),createMenu:summary=>{
     const t=(key,...values)=>translated(summary.language,key,...values);
-    return Menu.buildFromTemplate([{id:'tray-show',label:t('Show line'),click:()=>show('shelves')},{id:'tray-library',label:t('Library'),click:()=>show('library')},{id:'tray-capture',label:t('Screenshots'),click:()=>capture()},{id:'tray-settings',label:t('Settings'),click:()=>show('settings')},
+    return Menu.buildFromTemplate([{id:'tray-show',label:t('Show line'),click:()=>show('shelves')},{id:'tray-pause',label:t('Private mode'),type:'checkbox',checked:!!summary.paused,click:()=>{void command('togglePause');}},{id:'tray-library',label:t('Library'),click:()=>show('library')},{id:'tray-capture',label:t('Screenshots'),click:()=>capture().catch(error=>notify(error.message))},{id:'tray-settings',label:t('Settings'),click:()=>show('settings')},
       ...(summary.updateVersion?[{id:'tray-update',label:t('Update available')+': '+summary.updateVersion+'…',click:openUpdates}]:[]),{id:'tray-check',label:t('Check for updates…'),click:async()=>{await openUpdates();await updates.check();}},{type:'separator'},{id:'tray-quit',label:t('Quit %@','ClipBoardLine'),click:()=>app.quit()}]);
   }});
   refreshTray();tray.on('click',()=>desiredVisible?hide():show('shelves'));
@@ -176,9 +176,16 @@ async function clipboardContent() {
   return readClipboardContent({clipboard,sequence:()=>native.clipboardSequence(),marker:copyMarker,plainURL,captureLinks:store?.data.settings.captureLinks!==false});
 }
 async function readClipboard() {
-  if(capturing){pendingClipboard=true;return;}if(!store||closing||!['captureText','captureImages','captureLinks'].some(key=>store.data.settings[key]))return;capturing=true;
+  if(capturing){pendingClipboard=true;return;}if(!store||closing||!['captureText','captureImages','captureLinks'].some(key=>store.data.settings[key]))return;
+  // Private mode adopts the current generation so a copy made during the pause
+  // is never imported when capture resumes.
+  if(store.data.settings.paused){try{const sequence=await native.clipboardSequence();if(Number.isInteger(sequence)&&sequence>0)lastGeneration.sequence=sequence;}catch{}return;}
+  capturing=true;
   try{
     const content=await clipboardContent();if(!content)return;
+    // Private mode can be switched on while the clipboard is being read: drop
+    // that capture and adopt its generation so resuming never imports it.
+    if(store.data.settings.paused){if(Number.isInteger(content.sequence)&&content.sequence>0)lastGeneration.sequence=content.sequence;return;}
     if(content.raced){pendingClipboard=true;return;}
     if(repeatedGeneration(lastGeneration,content))return;
     if(content.fingerprint===ownFingerprint){ownFingerprint='';return;}
@@ -264,6 +271,7 @@ async function importFile(file) {
   const image=nativeImage.createFromPath(file);if(image.isEmpty())throw new Error('Unsupported image file');const item=store.insert('image',image.toPNG());queueOCR(item.id);refreshImageSearch();return item;
 }
 async function capture() {
+  if(store?.data.settings.paused)throw new Error('Private mode is on. New captures are paused.');
   const wasVisible=window.isVisible();visibilityGeneration++;desiredVisible=false;shelfMotion.cancel();if(wasVisible)window.hide();viewEvent=null;broadcast({surfaceOnly:true});await shelfMotion.request('reset');
   try{
     // Capture only after the shelf window has left the compositor.
@@ -298,6 +306,8 @@ async function recognize(id,quiet=false) {
 }
 function configureWatchers() {
   for(const watcher of watchers)watcher.close();watchers=[];
+  // Private mode skips new files from watched folders; existing files stay.
+  if(store?.data.settings.paused)return;
   for(const folder of store.data.settings.watchFolders){try{if(!fs.statSync(folder).isDirectory())continue;const timers=new Map();const watcher=fs.watch(folder,(_event,name)=>{if(!name||!/[.](png|jpe?g|webp|bmp|mov|mp4)$/i.test(name))return;clearTimeout(timers.get(name));timers.set(name,setTimeout(()=>{timers.delete(name);try{const file=path.join(folder,path.basename(name));const item=importFile(file);Promise.resolve(item).then(record=>{broadcast();if(store.data.settings.openAfterScreenshot)void show('shelves',{selectId:record.id,kind:'image'});}).catch(err=>{console.warn('Watch folder import error:',err?.message||err);});}catch(err){console.warn('Watch folder item error:',err?.message||err);}},700));});watcher.on('error',err=>{console.warn('Watch folder watcher error:',err?.message||err);});watchers.push(watcher);}catch(err){console.warn('Watch folder configure error:',err?.message||err);}}
 }
 let shortcutRegistry,shortcutRecording=null;
@@ -318,6 +328,7 @@ function configureShortcuts(previousPreferences=null) {
     toggle:()=>desiredVisible?hide():show('shelves'),
     search:()=>show('shelves',{search:true}),library:()=>show('library'),
     copyLatest:async()=>{const image=store.data.items.filter(item=>item.kind==='image'&&!item.trashedAt&&!item.hiddenFromShelf).sort((a,b)=>b.createdAt-a.createdAt)[0];if(image){await writeClipboard([image]);notify('Copied');if(store.data.settings.sounds)shell.beep();}},
+    pause:async()=>{await command('togglePause');},
     screenshot:capture
   },{failed:error=>notify(error.message)});
   const rejected=shortcutRegistry.update(store.data.settings.shortcuts);
@@ -371,6 +382,10 @@ async function command(action,payload={}) {
     await enrich(item.id,{refresh:true});result={id:item.id};
   }
   else if(action==='capture')result=await capture();
+  else if(action==='togglePause'){
+    const paused=!store.data.settings.paused;
+    store.modify('setSettings',{patch:{paused}});configureWatchers();message=paused?'Private mode is on. New captures are paused.':'Private mode is off. Capture resumed.';result={paused};
+  }
   else if(action==='newNote'){const item=store.insert('text',payload.text||'New note');if(payload.title)store.modify('details',{id:item.id,name:payload.title});store.modify('retain',{ids:[item.id]});result={id:item.id};}
   else if(action==='import'){const response=await dialog.showOpenDialog(window,{properties:['openFile','multiSelections'],filters:[{name:'Images, recordings and text',extensions:['png','jpg','jpeg','webp','bmp','mov','mp4','txt','md']}]});const imported=[],failures=[];for(const file of response.filePaths){try{const item=await importFile(file);imported.push(item.id);if(item.kind==='link')void enrich(item.id);}catch(error){failures.push(path.basename(file)+': '+error.message);}}result={ids:imported,failed:failures.length};if(failures.length)message=(imported.length?`Imported ${imported.length} · failed ${failures.length}. `:'')+failures[0];}
   else if(action==='searchImages'){if(!imageSearch)throw new Error('Offline image search is unavailable.');result=await imageSearch.search(payload.query,payload.eligibleIds);}
@@ -397,6 +412,7 @@ async function command(action,payload={}) {
     const previousShortcuts={...store.data.settings.shortcuts};
     store.modify('setSettings',{patch});if(wasIndexingImages&&!store.data.settings.indexImages)ocrQueue.discardPending();if(Object.hasOwn(patch,'retentionDays'))refreshImageSearch();if(Object.hasOwn(patch,'shortcuts')&&configureShortcuts(previousShortcuts).length)result={error:message};
     if(['captureText','captureImages','captureLinks'].some(key=>Object.hasOwn(patch,key)))lastGeneration.sequence=0;
+    if(Object.hasOwn(patch,'paused'))configureWatchers();
     if(Object.hasOwn(patch,'launchAtLogin')&&!testMode)app.setLoginItemSettings({openAtLogin:patch.launchAtLogin});
     if(Object.hasOwn(patch,'autoCheckUpdates')&&patch.autoCheckUpdates&&!development)void updateScheduler.tick({force:true});
   }else if(action==='watchFolder'||action==='chooseWatchFolder'){const response=await dialog.showOpenDialog(window,{properties:['openDirectory']});if(response.filePaths[0]){store.modify('setSettings',{patch:{watchFolders:[...store.data.settings.watchFolders,response.filePaths[0]]}});configureWatchers();}}
