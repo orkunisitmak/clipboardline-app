@@ -119,6 +119,20 @@ class CrossPlatformParityTests(unittest.TestCase):
         self.reports['macos']['observations'][0]['actual']['focused'] = 'not-an-item'
         self.rejected()
 
+    def observation(self, platform, action):
+        scenario = next(item['id'] for item in self.contract['scenarios'] if any(step['action'] == action for step in item['steps']))
+        index = next(i for i, step in enumerate(next(item for item in self.contract['scenarios'] if item['id'] == scenario)['steps']) if step['action'] == action)
+        return next(item for item in self.reports[platform]['observations'] if (item['scenarioId'], item['step']) == (scenario, index))
+
+    def test_command_that_acted_on_an_empty_shelf_is_rejected(self):
+        self.assertEqual(self.observation('windows', 'command')['actual']['effects'], [])
+        self.observation('windows', 'command')['actual']['effects'] = ['copy']
+        self.rejected()
+
+    def test_command_observation_without_effects_is_rejected(self):
+        del self.observation('macos', 'command')['actual']['effects']
+        self.rejected()
+
     def test_missing_snapshot_field_is_rejected(self):
         del self.reports['macos']['observations'][0]['actual']['searchEditing']
         self.rejected()

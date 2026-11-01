@@ -336,11 +336,12 @@ test('shared macOS/Windows shelf contract runs through actual renderer handlers'
    const source=f.state.items.find(value=>value.kind===entry.kind);
    return{...structuredClone(source),id,createdAt:10000-index,name:entry.kind==='image'?entry.text:'',text:entry.kind==='text'?entry.text:'',title:entry.kind==='link'?entry.text:'',url:entry.kind==='link'?'https://example.com/contract/'+entry.id:''};
   });
+  const kinds=new Map(contract.itemSets[scenario.itemSet].map(entry=>[entry.id,entry.kind]));
   f.api.emit({items:values,settings:{...f.state.settings,visibleKinds:scenario.visibleKinds}});await f.ready();
   for(const kind of scenario.pinnedOnlyKinds||[])await f.click('pinned-kind',{kind});
   await f.api.command('hide');await f.ready();
   for(let index=0;index<scenario.steps.length;index++){
-   const step=scenario.steps[index];const editor=f.nodes.get('search-input');if(editor)editor.matches=selector=>selector.includes('input');
+   const step=scenario.steps[index],commandsBefore=f.commands.length;const editor=f.nodes.get('search-input');if(editor)editor.matches=selector=>selector.includes('input');
    const searchEditing=/class="search-hud"/.test(f.main);
    if(step.action==='open')await f.api.command('show');
    else if(step.action==='close')await f.api.command('hide');
@@ -348,11 +349,14 @@ test('shared macOS/Windows shelf contract runs through actual renderer handlers'
    else if(step.action==='key')await f.key(step.code,searchEditing?{target:editor}:{});
    else if(['up','down','left','right'].includes(step.action))await f.key({up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight'}[step.action],searchEditing?{target:editor}:{});
    else if(step.action==='toggle')await f.key({image:'KeyI',text:'KeyT',link:'KeyL'}[step.kind],{shift:true});
+   else if(step.action==='switchShelf')await f.key('Tab');
+   else if(step.action==='command')await f.key(step.code,step.ctrl?{ctrl:true}:{});
    else if(step.action==='openSearch')await f.key('KeyS',{shift:true});
    else if(step.action==='finishSearch')await f.key('Enter',{target:editor});
    else throw new Error('Unsupported shared contract action: '+step.action);
    await f.ready();
-   const actual={activeKind:activeKind(f),focused:aliases.get(focusedCard(f))||null,selected:selectedCards(f).map(id=>aliases.get(id)||id).sort(),visibleKinds:[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]),searchEditing:/class="search-hud"/.test(f.main)};
+   const active=activeKind(f),focusedAlias=aliases.get(focusedCard(f)),actual={activeKind:active,focused:kinds.get(focusedAlias)===active?focusedAlias:null,selected:selectedCards(f).map(id=>aliases.get(id)||id).sort(),visibleKinds:[...f.main.matchAll(/<section class="shelf(?: active-shelf)?\s*" data-shelf="([^"]+)"/g)].map(match=>match[1]),searchEditing:/class="search-hud"/.test(f.main)};
+   if(step.action==='command')actual.effects=[...f.commands.slice(commandsBefore).map(value=>value.action),...(f.overlay?['preview']:[])];
    observations.push({scenarioId:scenario.id,step:index,actual});
    try{assert.deepEqual(actual,step.expect);}catch(error){errors.push(scenario.id+' step '+index+': '+error.message);}
   }
@@ -746,6 +750,16 @@ test('export and shortcut-conflict notices follow the selected language',async()
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
 });
 
+test('Tab onto an empty shelf leaves copy, take down, pin and preview with nothing to act on',async()=>{
+ const f=fixture();await f.ready();f.api.emit({items:f.state.items.filter(value=>value.kind!=='text')});await f.ready();
+ await f.key('Tab');assert.equal(activeKind(f),'text');const commands=f.commands.length;
+ for(const [code,extra]of [['Enter',{}],['KeyS',{}],['KeyP',{}],['Space',{}],['KeyC',{ctrl:true}]])await f.key(code,extra);
+ assert.deepEqual(f.commands.slice(commands),[]);assert.equal(f.overlay,'');assert.equal(f.state.items.find(value=>value.id===f.image).trashedAt,null);assert.equal(f.state.windowVisible,true);
+});
+test('Library selection counts use the shared "%d selected" catalog entry in the chosen language',async()=>{
+ const f=fixture();await f.ready();await f.key('KeyP');await f.key('ArrowDown');await f.key('KeyP');await f.api.command('library');await f.ready();await f.key('KeyA',{ctrl:true});
+ for(const [language,expected]of [['tr','2 seçili'],['es','2 seleccionadas'],['zh-Hans','已选择 2 项'],['en','2 selected']]){f.api.emit({settings:{...f.state.settings,language}});await f.ready();assert.match(f.main,new RegExp('<span>'+expected+'</span>'),language);assert.match(f.main,new RegExp('<h2>'+expected+'</h2>'),language+' inspector');await f.click('add-to-folder');assert.match(f.overlay,new RegExp('<p>'+expected+' · '),language+' folder picker');await f.click('close-modal');}
+});
 for(const row of [{code:'ArrowUp',key:'ArrowUp',saved:'Control+Alt+Up'},{code:'ArrowLeft',key:'ArrowLeft',shift:true,saved:'Control+Alt+Shift+Left'},{code:'Equal',key:'+',shift:true,saved:'Control+Alt+Shift+Plus'}])test('global recorder saves Electron accelerator names for DOM-only keys: '+JSON.stringify(row),async()=>{
  const f=fixture();await f.ready();await f.api.command('settings');await f.ready();await f.click('record-global',{keyAction:'search'});
  await f.key(row.code,{key:row.key,ctrl:true,alt:true,shift:!!row.shift});await f.click('confirm-modal');
@@ -757,4 +771,16 @@ test('Settings shortcut filter matches the displayed localized action titles as 
  await f.input('shortcut-filter','kopyala');assert.ok(rows().includes('copy'));assert.ok(!rows().includes('pin'));
  await f.input('shortcut-filter','Sabitle');assert.ok(rows().includes('pin'));assert.ok(!rows().includes('copy'));
  await f.input('shortcut-filter','copy');assert.ok(rows().includes('copy'));
+});
+test('the empty-selection toast uses the shared "Select an item first" catalog entry',async()=>{
+ const f=fixture();await f.ready();
+ f.api.emit({items:[],settings:{...f.state.settings,language:'tr'}});await f.ready();await f.key('KeyC',{ctrl:true});
+ assert.equal(f.nodes.get('toast').textContent,'Önce bir öğe seç');
+});
+test('the Move to Trash confirmation uses the shared localized catalog entry',async()=>{
+ const f=fixture();await f.ready();await keyboardSaved(f);
+ f.api.emit({settings:{...f.state.settings,language:'tr'}});await f.ready();await f.click('trash');
+ assert.match(f.overlay,/1 içerik geri alınabilir Çöp’e taşınsın mı\?/);
+ f.api.emit({settings:{...f.state.settings,language:'en'}});await f.click('close-modal');await f.click('trash');
+ assert.match(f.overlay,/Move 1 items to recoverable Trash\?/);
 });
