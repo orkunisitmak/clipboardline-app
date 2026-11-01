@@ -163,22 +163,18 @@ async function show(next='shelves',event=null) {
     const display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     applyingBounds=true;
     try{
-      const fill=!!linuxSession&&next==='shelves'&&store.data.settings.lineFullScreen===true;
-      // The compositor answers an unmaximize or full-screen exit with its own
-      // restore size; size the library only after that answer so the
-      // remembered size wins.
-      if(waylandLine&&next!=='shelves'&&windowSurface==='overlay')for(const [active,leave] of [[()=>window.isFullScreen(),()=>window.setFullScreen(false)],[()=>window.isMaximized(),()=>window.unmaximize()]])if(active())await new Promise(resolve=>{const done=()=>{clearTimeout(timer);window.removeListener('resize',done);resolve();},timer=setTimeout(done,500);window.once('resize',done);leave();});
-      if(linuxSession&&window.isFullScreen()&&!fill)window.setFullScreen(false);
+      // The compositor answers an unmaximize with its own restore size; size
+      // the library only after that answer so the remembered size wins.
+      if(waylandLine&&next!=='shelves'&&windowSurface==='overlay'&&window.isMaximized())await new Promise(resolve=>{const done=()=>{clearTimeout(timer);window.removeListener('resize',done);resolve();},timer=setTimeout(done,500);window.once('resize',done);window.unmaximize();});
       if(generation!==visibilityGeneration)return;
       const surface=next==='shelves'?'overlay':'normal';
       if(windowSurface!==surface){window.setMinimumSize(next==='shelves'?1:640,next==='shelves'?1:360);window.setResizable(next!=='shelves'||waylandLine);window.setMaximizable(next!=='shelves'||waylandLine);window.setSkipTaskbar(next==='shelves');window.setBackgroundColor(next==='shelves'?'#00000000':'#18191d');window.setHasShadow(next!=='shelves');window.setAlwaysOnTop(next==='shelves');windowSurface=surface;}
-      const bounds=next==='shelves'?(fill?display.bounds:display.workArea):fitNormalBounds(display.workArea);if(waylandLine&&next==='shelves'){if(window.isMinimized())window.restore();}else windowBounds.apply(window,bounds,{overlay:next==='shelves'});if(next!=='shelves'&&normalMaximized)window.maximize();
+      const bounds=next==='shelves'?display.workArea:fitNormalBounds(display.workArea);if(waylandLine&&next==='shelves'){if(window.isMinimized())window.restore();}else windowBounds.apply(window,bounds,{overlay:next==='shelves'});if(next!=='shelves'&&normalMaximized)window.maximize();
     }finally{applyingBounds=false;}
     const mapping=!window.isVisible(),animate=next==='shelves'&&(mapping||wasClosing||buried),warm=animate&&mapping&&revealDelay>0;
     if(animate)await shelfMotion.request('prepare',{hidden:!window.isVisible()||buried,...(warm?{warm:true}:{})});else await shelfMotion.request('reset');
     if(generation!==visibilityGeneration)return;
-    if(next==='shelves'&&store.data.settings.lineFullScreen===true&&linuxSession)window.setFullScreen(true);
-    else if(waylandLine&&next==='shelves')window.maximize();
+    if(waylandLine&&next==='shelves')window.maximize();
     window.show();window.focus();windowBounds.shown(window);broadcast({surfaceOnly:true});
     // Commands can await the settled pixels, but the window and keyboard are
     // available immediately. A concurrent toggle can cancel this animation.

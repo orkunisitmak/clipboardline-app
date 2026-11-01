@@ -17,9 +17,7 @@ const DEFAULTS = Object.freeze({
   autoCheckUpdates: true, watchFolders: [], openAfterScreenshot: true,
   theme:'soft', cardSize:'medium', sounds:false, launchAtLogin:false, language:'system',indexImages:true,
   libraryListMode:false,libraryInspectorVisible:true,librarySidebarVisible:true,librarySidebarWidth:220,libraryInspectorWidth:300,
-  libraryListColumns:{title:300,kind:80,tags:150,created:130},recentPinFolderIds:[],
-  // Linux: the line covers panels and the taskbar instead of the work area.
-  lineFullScreen:false
+  libraryListColumns:{title:300,kind:80,tags:150,created:130},recentPinFolderIds:[]
 });
 const clone = value => structuredClone(value);
 const fail = message => { throw new Error(message); };
@@ -36,7 +34,7 @@ function settings(patch, previous = DEFAULTS) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail('Invalid settings');
   const out = clone(previous);
   for (const [key, value] of Object.entries(patch)) {
-    if (['captureText', 'captureImages', 'captureLinks', 'fetchLinkMetadata','autoCheckUpdates', 'openAfterScreenshot','sounds','launchAtLogin','indexImages','libraryListMode','libraryInspectorVisible','librarySidebarVisible','lineFullScreen'].includes(key)) {
+    if (['captureText', 'captureImages', 'captureLinks', 'fetchLinkMetadata','autoCheckUpdates', 'openAfterScreenshot','sounds','launchAtLogin','indexImages','libraryListMode','libraryInspectorVisible','librarySidebarVisible'].includes(key)) {
       if (typeof value !== 'boolean') fail('Invalid preference');
       out[key] = value;
     } else if (key === 'visibleKinds') {
@@ -134,6 +132,8 @@ class Store {
       let parsed;
       try { parsed = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { fail('Library is unreadable. Original data was preserved; recover library.json.backup.'); }
       if (parsed.schema !== 1 || !Array.isArray(parsed.items) || parsed.items.length > 20000 || !Array.isArray(parsed.folders)) fail('Unsupported library format');
+      // Development Linux builds saved a full-screen line preference that no longer exists.
+      if(process.platform==='linux'&&parsed.settings&&typeof parsed.settings==='object')delete parsed.settings.lineFullScreen;
       this.data = {...parsed, settings: settings(parsed.settings)};
       for (const item of this.data.items) this.validateStored(item);
       if(this.data.pendingDeletionFiles&&(!Array.isArray(this.data.pendingDeletionFiles)||this.data.pendingDeletionFiles.length>200000||this.data.pendingDeletionFiles.some(name=>typeof name!=='string'||!MANAGED_MEDIA.test(name))))fail('Invalid pending deletion state.');

@@ -57,7 +57,6 @@ integration** shows the active mode and any missing optional package.
 | Ctrl+Enter | Copies, hides and returns focus; press Ctrl+V | Same as Wayland | Also pastes into the same, still active window when `xdotool` is installed |
 | Tray icon | StatusNotifierItem | Needs the AppIndicator extension (preinstalled on Ubuntu) | Most panels |
 | The line | Fills the monitor you are using; closes when another window takes focus (Wayland has no keep-above request) and slides in again on the next show | Stays above other windows | Stays above other windows |
-| Fill the whole screen (Settings → General) | Full screen over panels and the taskbar | Same | Same |
 | An image whose app then quits (Spectacle screenshots) | Stays on the clipboard while its item is on the shelf: ClipBoardLine serves the captured image again, as Klipper does. Text and links are not kept | Same | Same |
 
 Mutter (GNOME) offers no data-control protocol, which is why GNOME uses Xwayland.
@@ -190,7 +189,6 @@ Kaynaklar → Linux integration** etkin modu ve eksik isteğe bağlı paketleri 
 | Ctrl+Enter | Kopyalar, gizler ve odağı geri verir; Ctrl+V’ye basın | Wayland ile aynı | `xdotool` kuruluysa aynı, hâlâ etkin pencereye yapıştırır |
 | Tepsi simgesi | StatusNotifierItem | AppIndicator eklentisi gerekir (Ubuntu’da hazır gelir) | Çoğu panel |
 | İp | Kullandığınız ekranı doldurur; başka bir pencere odağı aldığında kapanır (Wayland’de üstte tutma isteği yoktur) ve bir sonraki açılışta yeniden kayarak gelir | Diğer pencerelerin üstünde kalır | Diğer pencerelerin üstünde kalır |
-| Tüm ekranı doldur (Ayarlar → Genel) | Paneller ve görev çubuğu dahil tam ekran | Aynı | Aynı |
 | Uygulaması sonra kapanan görsel (Spectacle ekran görüntüleri) | Öğesi askıdayken panoda kalır: ClipBoardLine, Klipper gibi yakaladığı görseli yeniden sunar. Metin ve linkler tutulmaz | Aynı | Aynı |
 
 GNOME’un Mutter’ı data-control protokolü sunmadığı için GNOME’da Xwayland

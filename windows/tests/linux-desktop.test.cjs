@@ -120,3 +120,9 @@ test('removing the package unregisters the command, but an rpm or deb upgrade ke
   for(const upgrade of ['1','2','upgrade','failed-upgrade','abort-upgrade'])assert.equal(run(upgrade),'','an upgrade keeps the command: '+upgrade);
   for(const removal of ['0','remove','purge'])assert.equal(run(removal),'--remove clipboardline /opt/ClipBoardLine/clipboardline','removal unregisters it: '+removal);
 });
+test('a library saved by an early Linux build with the removed full-screen preference still opens',t=>{
+  const {Store,DEFAULTS}=require('../lib/model.cjs'),directory=path.join(temporary(t),'data');fs.mkdirSync(directory,{mode:0o700});
+  fs.writeFileSync(path.join(directory,'library.json'),JSON.stringify({schema:1,items:[],folders:[],settings:{...DEFAULTS,lineFullScreen:true,sounds:true}}));
+  const store=new Store(directory);
+  assert.equal(Object.hasOwn(store.data.settings,'lineFullScreen'),false);assert.equal(store.data.settings.sounds,true,'other saved preferences are kept');
+});

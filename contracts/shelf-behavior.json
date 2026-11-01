@@ -55,13 +55,6 @@
         "reason": "Wayland forbids global key grabs by clients; the same five actions remain available through the portal or desktop shortcut commands."
       },
       {
-        "id": "linux-full-screen-line",
-        "macos": "The line covers the screen's visible frame",
-        "windows": "The line covers the display work area",
-        "linux": "The line covers the work area of the monitor in use; Settings → General → Fill the whole screen makes it full screen over panels and the taskbar",
-        "reason": "Linux desktops differ in panel layout and Wayland clients cannot place themselves, so the compositor's full-screen state is the only way to cover panels."
-      },
-      {
         "id": "linux-keep-clipboard",
         "macos": "A captured copy stays on the pasteboard after the app that copied it quits",
         "windows": "A captured copy stays on the clipboard after the app that copied it quits",
