@@ -412,20 +412,21 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
         return regex.stringByReplacingMatches(in: value, range: NSRange(value.startIndex..., in: value), withTemplate: replacement)
     }
     private static func sanitizeHTML(_ source: String) -> String {
-        var result = "", remaining = source[...]; var scanned = 0
-        while !remaining.isEmpty && scanned < source.count {
-            scanned += 1
+        var result = "", remaining = source[...]
+        while !remaining.isEmpty {
             guard remaining.first == "<" else {
                 result.append(remaining.removeFirst()); continue
             }
-            let lower = String(remaining.prefix(512)).lowercased()
+            let lower = Self.asciiLower(String(remaining.prefix(512)))
             if lower.hasPrefix("<!--") {
-                guard let end = lower.range(of: "-->")?.upperBound else { break }
-                let offset = String(lower[..<end]).count
-                let next = remaining.index(remaining.startIndex, offsetBy: min(offset, remaining.count))
-                remaining = remaining[next...]; continue
+                if let end = remaining.range(of: "-->", options: [], range: remaining.startIndex..<remaining.endIndex)?.upperBound {
+                    remaining = remaining[end...]; continue
+                }
+                break
             }
-            if lower.hasPrefix("<script") || lower.hasPrefix("<style") {
+            let scriptStart = lower.hasPrefix("<script") && (lower.count > 7 && (lower[lower.index(lower.startIndex, offsetBy: 7)].isWhitespace || lower[lower.index(lower.startIndex, offsetBy: 7)] == ">" || lower[lower.index(lower.startIndex, offsetBy: 7)] == "/"))
+            let styleStart = lower.hasPrefix("<style") && (lower.count > 6 && (lower[lower.index(lower.startIndex, offsetBy: 6)].isWhitespace || lower[lower.index(lower.startIndex, offsetBy: 6)] == ">" || lower[lower.index(lower.startIndex, offsetBy: 6)] == "/"))
+            if scriptStart || styleStart {
                 guard let openingRelative = lower.firstIndex(of: ">") else { break }
                 let openingOffset = String(lower[..<openingRelative]).count
                 let consumed = remaining.index(remaining.startIndex, offsetBy: min(openingOffset, remaining.count))
@@ -435,7 +436,7 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
                     remaining = remaining[consumed...]
                 }
                 let tag = lower.hasPrefix("<script") ? "</script" : "</style"
-                let closeText = String(remaining.prefix(min(remaining.count, 262144))).lowercased()
+                let closeText = Self.asciiLower(String(remaining.prefix(min(remaining.count, 262144))))
                 guard let close = closeText.range(of: tag)?.lowerBound else { break }
                 let closeOffset = String(closeText[..<close]).count
                 let closeStart = remaining.index(remaining.startIndex, offsetBy: closeOffset)
@@ -446,6 +447,13 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
             result.append(remaining.removeFirst())
         }
         return result
+    }
+    private static func asciiLower(_ value: String) -> String {
+        String(value.map { character in
+            guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+                  scalar.value >= 65, scalar.value <= 90 else { return character }
+            return Character(UnicodeScalar(scalar.value + 32)!)
+        })
     }
     private static func title(in html: String) -> String? {
         var from = html.startIndex
