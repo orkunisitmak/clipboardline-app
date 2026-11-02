@@ -107,8 +107,8 @@ async function linkMetadata(input, fetcher = metadataFetch) {
     return {title: String(data.title || '').trim().slice(0, 500)||url.hostname, author: String(data.author_name || '').slice(0, 200), thumbnail: typeof data.thumbnail_url==='string'?data.thumbnail_url:''};
   }
   const response = await fetcher(url.href); if (!/text\/html|application\/xhtml/i.test(response.type)) return {title: url.hostname};
-  // As on macOS, comments and script/style bodies never supply the title or image.
-  const html = decodeHTML(response.bytes, response.type).replace(/(<meta\b(?:"[^"]*"|'[^']*'|[^>"']){0,4000}>)|<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, (all, meta) => meta || '');
+  // As on macOS, comments and script/style bodies never supply the title or image, even when unclosed.
+  const html = decodeHTML(response.bytes, response.type).replace(/(<meta\b(?:"[^"]*"|'[^']*'|[^>"']){0,4000}>)|<!--[\s\S]*?(?:-->|$)|<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|$)|<style\b[^>]*>[\s\S]*?(?:<\/style\s*>|$)/gi, (all, meta) => meta || '');
   // Collapse layout whitespace only in display text; og:image stays a URL.
   const title = collapse(meta(html, 'og:title')) || collapse(entities((html.match(/<title[^>]*>([\s\S]{0,2000}?)<\/title>/i)?.[1] || '').replace(/<[^>]*>/g, ''))) || url.hostname;
   const rawThumbnail = meta(html, 'og:image');

@@ -25,6 +25,16 @@ test('meta tags inside comments, scripts and styles do not supply the preview ti
  assert.deepEqual(await page('<!--'+fake+'--><meta property="og:title" content="Real og"><meta property="og:image" content="/real.png">'),{title:'Real og',thumbnail:'https://example.com/real.png'});
 });
 
+test('unclosed comments, scripts and styles hide their fake tags and bad input stays bounded',async()=>{
+ const page=html=>linkMetadata('https://example.com/a',async()=>({bytes:Buffer.from(html),url:'https://example.com/a',type:'text/html'}));
+ const fake='<meta property="og:title" content="Fake"><meta property="og:image" content="https://example.com/fake.png">';
+ for(const opener of ['<!--','<script>','<style>','<SCRIPT type="x">'])assert.deepEqual(await page('<title>Real</title>'+opener+fake),{title:'Real',thumbnail:''},opener);
+ for(const html of ['','   \n ','<','<!--','<script','<style>','-->','</script>'])assert.deepEqual(await page(html),{title:'example.com',thumbnail:''},html);
+ const started=Date.now();
+ for(const html of ['<!--'.repeat(40000),'<script>'.repeat(20000),'<style '.repeat(20000),'<meta '.repeat(20000)])await page(html);
+ assert.ok(Date.now()-started<5000);
+});
+
 test('a script or comment marker inside a meta attribute does not hide the real preview tags',async()=>{
  const page=html=>linkMetadata('https://example.com/a',async()=>({bytes:Buffer.from(html),url:'https://example.com/a',type:'text/html'}));
  const real='<meta property="og:title" content="Real"><meta property="og:image" content="/real.png">';
