@@ -49,12 +49,23 @@ def audit(root):
         manifest.append({'file': name, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
         # This scanner's own expressions are patterns, not real credentials.
         # Runtime-generated test keys remain in ignored temporary directories.
+        # UTF-16 stores one NUL byte per ASCII character, so also scan both decodings.
+        views = [data]
+        if b'\0' in data:
+            # Shifting past a whole UTF-16LE line feed (0A 00) would drop that line from the count; keep it.
+            views += [(b'\n' if shift and codec == 'utf-16-be' and data[:2] == b'\n\0' else b'') + data[shift:].decode(codec, 'ignore').encode() for shift in (0, 1) for codec in ('utf-16-le', 'utf-16-be')]
+        seen = set()
         for rule, pattern in PATTERNS.items():
-            for match in re.finditer(pattern, data):
-                if (rule == 'url-userinfo' and name == 'Tests/ImageHistoryTests/AppUpdateControllerTests.swift' and
-                    match.group() == b'https://user' + b':password@'):
-                    continue  # Exact synthetic credential-rejection test, never a real credential.
-                findings.append({'file': name, 'line': data[:match.start()].count(b'\n') + 1, 'rule': rule})
+            for view in views:
+                line, offset = 1, 0
+                for match in re.finditer(pattern, view):
+                    line += view.count(b'\n', offset, match.start()); offset = match.start()
+                    if (rule == 'url-userinfo' and name == 'Tests/ImageHistoryTests/AppUpdateControllerTests.swift' and
+                        match.group() == b'https://user' + b':password@'):
+                        continue  # Exact synthetic credential-rejection test, never a real credential.
+                    if (rule, line) not in seen:
+                        seen.add((rule, line))
+                        findings.append({'file': name, 'line': line, 'rule': rule})
     return {'filesScanned': len(manifest), 'findings': findings, 'files': manifest}
 
 

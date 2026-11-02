@@ -33,6 +33,30 @@ class PublicationGuardTests(unittest.TestCase):
         (self.root / 'bad.txt').write_text('HTTPS://user:' + 'hunter2pass@host.example/')
         self.assertEqual([f['rule'] for f in scanner.audit(self.root)['findings']], ['url-userinfo'])
 
+    def test_secret_in_utf16_file_is_flagged_on_its_line(self):
+        value = 'gh' + 'p_' + 'C' * 36
+        for codec in ('utf-16', 'utf-16-le', 'utf-16-be'):
+            (self.root / 'u.txt').write_bytes(('ok\n' + value + '\n').encode(codec))
+            self.assertEqual(scanner.audit(self.root)['findings'], [{'file': 'u.txt', 'line': 2, 'rule': 'github-token'}], codec)
+            self.assertNotIn(value, json.dumps(scanner.audit(self.root)))
+
+    def test_secret_in_utf16_text_after_an_odd_byte_is_flagged(self):
+        value = 'gh' + 'p_' + 'D' * 36
+        for codec in ('utf-16-le', 'utf-16-be'):
+            (self.root / 'o.bin').write_bytes(b'\x01' + value.encode(codec))
+            self.assertEqual(scanner.audit(self.root)['findings'], [{'file': 'o.bin', 'line': 1, 'rule': 'github-token'}], codec)
+
+    def test_secret_in_utf16_text_after_a_leading_newline_is_flagged_once_on_its_line(self):
+        value = 'gh' + 'p_' + 'E' * 36
+        for codec in ('utf-16-le', 'utf-16-be'):
+            (self.root / 'n.txt').write_bytes(('\n' + value).encode(codec))
+            self.assertEqual(scanner.audit(self.root)['findings'], [{'file': 'n.txt', 'line': 2, 'rule': 'github-token'}], codec)
+
+    def test_utf16_character_ending_in_a_line_feed_byte_keeps_its_own_line(self):
+        value = 'gh' + 'p_' + 'G' * 36
+        (self.root / 'c.txt').write_bytes(('\u010a ' + value).encode('utf-16-le'))
+        self.assertEqual(scanner.audit(self.root)['findings'], [{'file': 'c.txt', 'line': 1, 'rule': 'github-token'}])
+
     def test_private_artifact_and_symlink_are_rejected(self):
         (self.root / 'credential.p12').write_bytes(b'not a real key')
         (self.root / 'source.txt').write_text('ordinary source')
