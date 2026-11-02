@@ -122,6 +122,15 @@ import XCTest
         XCTAssertEqual(long.title?.count, 500)
         XCTAssertThrowsError(try PublicLinkHTMLMetadata(data: Data(repeating: 65, count: 512 * 1024 + 1), url: url))
     }
+
+    func testWhitespaceOnlyOpenGraphImageGivesNoThumbnailAndValidOneIsKept() throws {
+        let url = URL(string: "https://public.example.org/page")!
+        for blank in ["", "   ", "\n\t"] {
+            XCTAssertNil(try PublicLinkHTMLMetadata(data: Data("<meta property='og:image' content='\(blank)'>".utf8), url: url).thumbnailURL)
+        }
+        let valid = try PublicLinkHTMLMetadata(data: Data("<meta property='og:image' content='/a.png'>".utf8), url: url)
+        XCTAssertEqual(valid.thumbnailURL?.absoluteString, "https://public.example.org/a.png")
+    }
 }
 
 #if !STANDALONE_TESTS

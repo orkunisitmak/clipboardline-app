@@ -54,6 +54,12 @@
         "windows": "decodeHTML in lib/network.cjs follows that order with TextDecoder; security.test.cjs covers it."
       },
       {
+        "id": "link-blank-thumbnail",
+        "behavior": "A link preview whose Open Graph image is empty or only whitespace has no thumbnail; a valid relative image URL is resolved against the page address.",
+        "macos": "PublicLinkHTMLMetadata drops a whitespace-only og:image before resolving it; PublicLinkNetworkTests.testWhitespaceOnlyOpenGraphImageGivesNoThumbnailAndValidOneIsKept covers it.",
+        "windows": "linkMetadata in lib/network.cjs treats a whitespace-only og:image as missing; security.test.cjs covers it."
+      },
+      {
         "id": "mixed-selection-pin",
         "behavior": "Pin on a selection that contains both pinned and unpinned items pins every item; only a selection that is already fully pinned unpins.",
         "macos": "LibraryStore.toggleFavorite and Line.pinActiveSelection compute one target for the whole selection, matching the action bar, which offers Unpin only when every selected item is pinned; LibraryKeyboardContractTests runs the library-pin-on-a-mixed-selection-pins-all-then-unpins-all scenario of contracts/library-keyboard.json.",
