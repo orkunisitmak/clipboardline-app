@@ -30,7 +30,7 @@ import XCTest
 
     func testInternationalHostsUsePunycodeAndBlockedNamesStayBlockedInOtherSpellings() throws {
         for value in ["https://münchen.de/a", "https://xn--mnchen-3ya.de/a", "https://XN--MNCHEN-3YA.de/a"] {
-            let destination = try XCTUnwrap(PublicLinkDestination(try XCTUnwrap(URL(string: value))), value)
+            let destination = try XCTUnwrap(PublicLinkDestination(try XCTUnwrap(URL(string: value))))
             XCTAssertEqual(destination.hostname, "xn--mnchen-3ya.de", value)
             XCTAssertEqual(destination.url.absoluteString, "https://xn--mnchen-3ya.de/a", value)
         }
