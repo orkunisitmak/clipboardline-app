@@ -281,6 +281,7 @@ class Store {
     item.createdAt = now; item.updatedAt = now; item.hiddenFromShelf = false;item.captureRevision=crypto.randomUUID();
     if(kind==='text')item.text=textValue;
     if (extra.title) item.title = text(extra.title, 500, true);
+    if (extra.createdAsNote) item.createdAsNote = true; // part of the first write, so a stop before retain cannot leave an unmarked note
     if (matching.length > 1) {
       item.pinned ||= matching.some(i => i.pinned);
       item.folderIds = [...new Set(matching.flatMap(i => i.folderIds))]; item.tags = [...new Set(matching.flatMap(i => i.tags))];
@@ -293,8 +294,7 @@ class Store {
   }
   /** A new, retained note record, like macOS createNote. It never reuses a matching capture. */
   createNote({text: value = '', title = ''} = {}) {
-    const item = this.insert('text', value || 'New note', {fresh: true});
-    item.createdAsNote = true;
+    const item = this.insert('text', value || 'New note', {fresh: true, createdAsNote: true});
     if (title) this.modify('details', {id: item.id, name: title});
     this.modify('retain', {ids: [item.id]});
     return item;
