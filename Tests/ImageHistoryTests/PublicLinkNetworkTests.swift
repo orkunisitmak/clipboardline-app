@@ -131,6 +131,14 @@ import XCTest
         let valid = try PublicLinkHTMLMetadata(data: Data("<meta property='og:image' content='/a.png'>".utf8), url: url)
         XCTAssertEqual(valid.thumbnailURL?.absoluteString, "https://public.example.org/a.png")
     }
+
+    func testUnclosedScriptOgTitleIsNotThePreviewTitle() throws {
+        let url = URL(string: "https://public.example.org/page")!
+        let unclosed = try PublicLinkHTMLMetadata(data: Data(#"<html><title>Real</title><script><meta property='og:title' content='script'>"#.utf8), url: url)
+        XCTAssertNotEqual(unclosed.title, "script")
+        let literalTitle = try PublicLinkHTMLMetadata(data: Data(#"<script>const m="<title>";<meta property='og:title' content='script'>"#.utf8), url: url)
+        XCTAssertNotEqual(literalTitle.title, "script")
+    }
 }
 
 #if !STANDALONE_TESTS
