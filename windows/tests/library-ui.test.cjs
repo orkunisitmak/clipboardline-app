@@ -368,13 +368,20 @@ test('a background state push keeps keyboard focus on the focused dialog button 
  const cancels=buttons.filter(button=>button.dataset.action==='close-modal');assert.equal(cancels.length,2,'header close and footer Cancel');
  cancels[1].focus();assert.equal(f.document.activeElement,cancels[1]);
  f.api.emit({});await f.ready();
+ const retained=buttons.filter(button=>button.dataset.action==='close-modal');
+ assert.equal(retained[1],cancels[1],'unchanged dialog content must preserve the original Cancel element');
+ assert.equal(f.document.activeElement,cancels[1],'focus stays on the same Cancel button');
+ // A real dialog content change still regenerates the overlay and transfers focus.
+ await f.input('simple-input','Changed dialog text');f.api.emit({});await f.ready();
  const rebuilt=buttons.filter(button=>button.dataset.action==='close-modal');
- assert.notEqual(rebuilt[1],cancels[1],'the overlay was rebuilt');assert.equal(f.document.activeElement,rebuilt[1],'focus returns to the same (footer) Cancel button');
+ assert.notEqual(rebuilt[1],cancels[1],'changed dialog content must rebuild the overlay');
+ assert.equal(f.document.activeElement,rebuilt[1],'focus returns to the same (footer) Cancel button');
  // A different dialog, or no focused button, must not steal focus.
  f.document.activeElement=f.document.body;f.api.emit({});await f.ready();assert.equal(f.document.activeElement,f.document.body);
  // An unmatchable selector (for example a stored tag with a control character) must not stop the refresh.
  const again=buttons.filter(button=>button.dataset.action==='close-modal');again[1].focus();overlay.querySelectorAll=()=>{throw new SyntaxError('invalid selector');};
- f.api.emit({});await f.ready();assert.ok(overlay.innerHTML.includes('close-modal'),'the overlay is still rebuilt');
+ await f.input('simple-input','Changed again');f.api.emit({});await f.ready();
+ assert.ok(overlay.innerHTML.includes('Changed again'),'invalid focus selectors must not block a required overlay update');
 });
 test('Space on a focused dialog button activates it on keydown, so a background refresh between keydown and keyup cannot drop the click',async()=>{
  const f=fixture();await f.ready();await f.key('KeyF');
