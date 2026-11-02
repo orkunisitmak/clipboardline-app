@@ -31,7 +31,7 @@ test('unclosed comments, scripts and styles hide their fake tags and bad input s
  for(const opener of ['<!--','<script>','<style>','<SCRIPT type="x">'])assert.deepEqual(await page('<title>Real</title>'+opener+fake),{title:'Real',thumbnail:''},opener);
  for(const html of ['','   \n ','<','<!--','<script','<style>','-->','</script>'])assert.deepEqual(await page(html),{title:'example.com',thumbnail:''},html);
  const started=Date.now();
- for(const html of ['<!--'.repeat(40000),'<script>'.repeat(20000),'<style '.repeat(20000),'<meta '.repeat(20000)])await page(html);
+ for(const [piece,count] of [['<!--',131072],['<script>',65536],['<style ',74898],['<script ',65536],['<title ',74898],['<meta ',87381]])await page(piece.repeat(count));
  assert.ok(Date.now()-started<5000);
 });
 
