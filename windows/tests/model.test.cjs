@@ -209,3 +209,29 @@ test('pin on a mixed selection pins every item and only a fully pinned selection
  s.modify('pin',{ids:[a.id]});s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[true,true]);
  s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[false,false]);
 }));
+
+test('links that differ only by tracking parameters or a youtu.be form share one entry like macOS',()=>fixture(s=>{
+ const first=s.insert('link','https://example.com/a?id=1');
+ assert.equal(s.insert('link','https://example.com/a?id=1&utm_source=x').id,first.id);
+ assert.equal(s.insert('link','https://example.com/a?id=1&fbclid=z').id,first.id);
+ assert.notEqual(s.insert('link','https://example.com/a?id=2').id,first.id);
+ const video=s.insert('link','https://youtu.be/dQw4w9WgXcQ');
+ assert.equal(s.insert('link','https://www.youtube.com/watch?v=dQw4w9WgXcQ').id,video.id);
+ assert.equal(s.data.items.filter(i=>i.kind==='link').length,3);
+}));
+
+test('link merging keeps non-tracking query syntax, ignores v outside /watch and keeps every distinct note',()=>fixture(s=>{
+ const flag=s.insert('link','https://example.com/a?flag');
+ assert.notEqual(s.insert('link','https://example.com/a?flag=').id,flag.id);
+ const plus=s.insert('link','https://example.com/a?q=a+b');
+ assert.notEqual(s.insert('link','https://example.com/a?q=a%20b').id,plus.id);
+ assert.doesNotThrow(()=>s.insert('link','https://example.com/??'));assert.doesNotThrow(()=>s.insert('link','https://example.com/??'));
+ assert.notEqual(s.insert('link','https://youtu.be/dQw4w9WgXcQ?v=other').id,s.insert('link','https://youtu.be/dQw4w9WgXcQ').id);
+ assert.equal(s.insert('link','https://example.com/a?flag&utm_source=x').id,flag.id);
+ const watch=s.insert('link','https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+ assert.notEqual(s.insert('link','https://www.youtube.com/@creator?v=dQw4w9WgXcQ').id,watch.id);
+ const a=s.insert('link','https://example.com/n'),b=s.insert('link','https://example.com/other');
+ b.url='https://example.com/n?utm_source=x';a.note='first';b.note='second';
+ const merged=s.insert('link','https://example.com/n?fbclid=z');
+ assert.deepEqual(merged.note.split('\n\n').sort(),['first','second']);assert.equal(s.data.items.filter(i=>i.url.startsWith('https://example.com/n')).length,1);
+}));
