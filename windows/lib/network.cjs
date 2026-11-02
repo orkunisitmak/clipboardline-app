@@ -107,9 +107,10 @@ async function linkMetadata(input, fetcher = metadataFetch) {
     return {title: String(data.title || '').trim().slice(0, 500)||url.hostname, author: String(data.author_name || '').slice(0, 200), thumbnail: typeof data.thumbnail_url==='string'?data.thumbnail_url:''};
   }
   const response = await fetcher(url.href); if (!/text\/html|application\/xhtml/i.test(response.type)) return {title: url.hostname};
-  const html = decodeHTML(response.bytes, response.type);
+  // Comments and script/style bodies never supply the title or image; an unclosed one hides the rest of the page.
+  const html = decodeHTML(response.bytes, response.type).replace(/(<meta\b(?:"[^"]*"|'[^']*'|[^>"']){0,4000}>)|<!--[\s\S]*?(?:-->|$)|<script\b[^>]{0,4096}>[\s\S]*?(?:<\/script\s*>|$)|<style\b[^>]{0,4096}>[\s\S]*?(?:<\/style\s*>|$)/gi, (all, meta) => meta || '');
   // Collapse layout whitespace only in display text; og:image stays a URL.
-  const title = collapse(meta(html, 'og:title')) || collapse(entities((html.match(/<title[^>]*>([\s\S]{0,2000}?)<\/title>/i)?.[1] || '').replace(/<[^>]*>/g, ''))) || url.hostname;
+  const title = collapse(meta(html, 'og:title')) || collapse(entities((html.match(/<title[^>]{0,4096}>([\s\S]{0,2000}?)<\/title>/i)?.[1] || '').replace(/<[^>]*>/g, ''))) || url.hostname;
   const rawThumbnail = meta(html, 'og:image');
   let thumbnail = rawThumbnail.trim() ? rawThumbnail : '';
   if (thumbnail) try { thumbnail = new URL(thumbnail, response.url).href; } catch { thumbnail = ''; }
