@@ -528,6 +528,7 @@ enum HistoryTestRunner {
             ("testDomainFilterIncludesSubdomainsWithLiteralHostBoundaries", libraryStore.testDomainFilterIncludesSubdomainsWithLiteralHostBoundaries),
             ("testBlankOrPaddedItemNameIsIgnoredOrTrimmedLikeWindows", libraryStore.testBlankOrPaddedItemNameIsIgnoredOrTrimmedLikeWindows),
             ("testTagRenameSearchTurkishAndLiteralSQLCharacters", libraryStore.testTagRenameSearchTurkishAndLiteralSQLCharacters),
+            ("testSearchMatchesTurkishDotlessIAndRefoldsOlderRows", libraryStore.testSearchMatchesTurkishDotlessIAndRefoldsOlderRows),
             ("testTrashRestoresContentAndRelationshipsWithoutMovingOriginal", libraryStore.testTrashRestoresContentAndRelationshipsWithoutMovingOriginal),
             ("testAdaptersShareStableIdentityTextEditsFavoritesAndRestart", libraryStore.testAdaptersShareStableIdentityTextEditsFavoritesAndRestart),
             ("testInvalidBatchRollsBackInsteadOfPartiallyAssigningOrRetaining", libraryStore.testInvalidBatchRollsBackInsteadOfPartiallyAssigningOrRetaining),
