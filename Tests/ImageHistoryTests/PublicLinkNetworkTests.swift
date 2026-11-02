@@ -131,6 +131,12 @@ import XCTest
         let valid = try PublicLinkHTMLMetadata(data: Data("<meta property='og:image' content='/a.png'>".utf8), url: url)
         XCTAssertEqual(valid.thumbnailURL?.absoluteString, "https://public.example.org/a.png")
     }
+
+    func testTextareaContentIsNotThePreviewTitle() throws {
+        let url = URL(string: "https://public.example.org/page")!
+        let parsed = try PublicLinkHTMLMetadata(data: Data("<title>gerçek</title><textarea><meta property='og:title' content='Sahte'></textarea>".utf8), url: url)
+        XCTAssertEqual(parsed.title, "gerçek")
+    }
 }
 
 #if !STANDALONE_TESTS
