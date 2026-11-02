@@ -423,8 +423,7 @@ class Store {
       if(action==='renameTag'){
         name=text(payload.name,TAG_INPUT_LIMIT).trim();
         if(!name||!validTagName(name))fail('Invalid tag name');
-        const folded=value=>value.normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase();
-        if(this.data.items.some(item=>item.tags.some(value=>value!==tag&&folded(value)===folded(name))))fail('A tag with this name already exists');
+        if(this.data.items.some(item=>item.tags.some(value=>value!==tag&&foldedName(value)===foldedName(name))))fail('A tag with this name already exists');
       }
       for(const item of affected){item.retainedAt??=now;item.tags=action==='renameTag'?[...new Set(item.tags.map(value=>value===tag?name:value))]:item.tags.filter(value=>value!==tag);}
       this.persist();this.invalidateTrashUndo(affected.map(item=>item.id));return;
