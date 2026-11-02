@@ -72,7 +72,7 @@ struct PublicLinkDestination: Equatable, Sendable {
               labels.last?.contains(where: { $0.isLetter }) == true else { return nil }
         let secretNames: Set<String> = ["token", "accesstoken", "refreshtoken", "idtoken", "auth", "authorization", "authentication", "authtoken", "password", "secret", "clientsecret", "key", "apikey", "accesskeyid", "signature", "sig", "code", "session", "sessionid", "credential", "credentials", "jwt", "bearer", "state", "policy", "keypairid", "verifier"]
         guard !(c.queryItems ?? []).contains(where: {
-            let name = $0.name.lowercased().replacingOccurrences(of: "-", with: "").replacingOccurrences(of: "_", with: "")
+            let name = String($0.name.lowercased().unicodeScalars.filter { (97...122).contains($0.value) || (48...57).contains($0.value) })
             return secretNames.contains(name) || name.hasPrefix("xamz") || name.hasPrefix("xgoog") || name.hasPrefix("oauth")
         }) else { return nil }
         c.scheme = "https"; c.host = host; c.port = nil; c.fragment = nil
