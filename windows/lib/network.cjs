@@ -108,7 +108,7 @@ async function linkMetadata(input, fetcher = metadataFetch) {
   }
   const response = await fetcher(url.href); if (!/text\/html|application\/xhtml/i.test(response.type)) return {title: url.hostname};
   // As on macOS, comments and script/style bodies never supply the title or image.
-  const html = decodeHTML(response.bytes, response.type).replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+  const html = decodeHTML(response.bytes, response.type).replace(/(<meta\b(?:"[^"]*"|'[^']*'|[^>"']){0,4000}>)|<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, (all, meta) => meta || '');
   // Collapse layout whitespace only in display text; og:image stays a URL.
   const title = collapse(meta(html, 'og:title')) || collapse(entities((html.match(/<title[^>]*>([\s\S]{0,2000}?)<\/title>/i)?.[1] || '').replace(/<[^>]*>/g, ''))) || url.hostname;
   const rawThumbnail = meta(html, 'og:image');

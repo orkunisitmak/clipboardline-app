@@ -24,3 +24,11 @@ test('meta tags inside comments, scripts and styles do not supply the preview ti
  }
  assert.deepEqual(await page('<!--'+fake+'--><meta property="og:title" content="Real og"><meta property="og:image" content="/real.png">'),{title:'Real og',thumbnail:'https://example.com/real.png'});
 });
+
+test('a script or comment marker inside a meta attribute does not hide the real preview tags',async()=>{
+ const page=html=>linkMetadata('https://example.com/a',async()=>({bytes:Buffer.from(html),url:'https://example.com/a',type:'text/html'}));
+ const real='<meta property="og:title" content="Real"><meta property="og:image" content="/real.png">';
+ for(const marker of ['<script>','<style>','<!--']){
+  assert.deepEqual(await page('<meta name="keywords" content="a '+marker+' b">'+real+'<script>x</script>'),{title:'Real',thumbnail:'https://example.com/real.png'},marker);
+ }
+});
