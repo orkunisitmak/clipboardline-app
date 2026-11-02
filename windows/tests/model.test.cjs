@@ -209,3 +209,13 @@ test('pin on a mixed selection pins every item and only a fully pinned selection
  s.modify('pin',{ids:[a.id]});s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[true,true]);
  s.modify('pin',{ids:[a.id,b.id]});assert.deepEqual(pinned(),[false,false]);
 }));
+
+test('links that differ only by tracking parameters or a youtu.be form share one entry like macOS',()=>fixture(s=>{
+ const first=s.insert('link','https://example.com/a?id=1');
+ assert.equal(s.insert('link','https://example.com/a?id=1&utm_source=x').id,first.id);
+ assert.equal(s.insert('link','https://example.com/a?id=1&fbclid=z').id,first.id);
+ assert.notEqual(s.insert('link','https://example.com/a?id=2').id,first.id);
+ const video=s.insert('link','https://youtu.be/dQw4w9WgXcQ');
+ assert.equal(s.insert('link','https://www.youtube.com/watch?v=dQw4w9WgXcQ').id,video.id);
+ assert.equal(s.data.items.filter(i=>i.kind==='link').length,3);
+}));
