@@ -423,12 +423,12 @@ struct PublicLinkHTMLMetadata: Equatable, Sendable {
 
     private static func entities(_ value: String) -> String {
         let named = namedEntities, names = named.keys.joined(separator: "|")
-        guard let regex = try? NSRegularExpression(pattern: #"&(#x[0-9A-Fa-f]{1,6}|#[0-9]{1,7}|\#(names));"#) else { return value }
+        guard let regex = try? NSRegularExpression(pattern: #"&(#[xX][0-9A-Fa-f]{1,6}|#[0-9]{1,7}|\#(names));"#) else { return value }
         var result = value
         for match in regex.matches(in: value, range: NSRange(value.startIndex..., in: value)).reversed() {
             guard let whole = Range(match.range, in: result), let nameRange = Range(match.range(at: 1), in: value) else { continue }
             let name = String(value[nameRange]); var replacement = named[name]
-            if name.hasPrefix("#x"), let number = UInt32(name.dropFirst(2), radix: 16), let scalar = UnicodeScalar(number), !CharacterSet.controlCharacters.contains(scalar) { replacement = String(scalar) }
+            if name.lowercased().hasPrefix("#x"), let number = UInt32(name.dropFirst(2), radix: 16), let scalar = UnicodeScalar(number), !CharacterSet.controlCharacters.contains(scalar) { replacement = String(scalar) }
             else if name.hasPrefix("#"), let number = UInt32(name.dropFirst()), let scalar = UnicodeScalar(number), !CharacterSet.controlCharacters.contains(scalar) { replacement = String(scalar) }
             if let replacement { result.replaceSubrange(whole, with: replacement) }
         }
